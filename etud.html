@@ -510,7 +510,7 @@ async function loadModel() {
     }
     prog(20,`Backend: ${tf.getBackend()} — model yükleniyor…`);
 
-    G.model = await tf.loadLayersModel(MODEL_PATH, {
+    G.model = await tf.loadGraphModel(MODEL_PATH, {
       onProgress: f => prog(20 + Math.floor(f*70), `Ağırlıklar: %${Math.floor(f*100)}`)
     });
 
@@ -526,13 +526,19 @@ async function loadModel() {
 }
 
 async function warmup() {
-  // Dummy tensor ile GPU'yu ısıt (ilk gerçek inference yavaş olmasın)
+  // GraphModel: input isimleri model.json Placeholder node isimleri
+  // kata-model-js: bin_inputs [1,361,22] flat, global_inputs [1,19]
   tf.tidy(() => {
-    const bi = tf.zeros([1, G.size, G.size, 22]);
+    const bi = tf.zeros([1, 19*19, 22]);
     const gi = tf.zeros([1, 19]);
-    const out = G.model.predict([bi, gi]);
-    if (Array.isArray(out)) out.forEach(t=>t.dispose());
-    else out.dispose();
+    try {
+      const out = G.model.execute({
+        'swa_model/bin_inputs':    bi,
+        'swa_model/global_inputs': gi,
+      });
+      if (Array.isArray(out)) out.forEach(t=>t.dispose());
+      else out.dispose();
+    } catch(e) { console.warn('Warmup skip:', e.message); }
   });
 }
 
@@ -565,6 +571,7 @@ function onModelFail() {
    Kaynak: maksimKorzh/kata-model-js/js/kata.js
 */
 function buildInputs(g, turn, size, komi) {
+  // GraphModel flat format: [batch, cells, channels] = [1, size*size, 22]
   const bi = new Float32Array(size*size*22);
   const gi = new Float32Array(19);
 
@@ -576,10 +583,10 @@ function buildInputs(g, turn, size, komi) {
     if (turn==='black') bi[base+6] = 1;
     bi[base+7] = 1; // bias
   }
-  gi[0] = komi/20;         // normalize komi
+  gi[0] = komi/20;
   gi[5] = turn==='black'?1:0;
   return {
-    bi: tf.tensor4d(bi,[1,size,size,22]),
+    bi: tf.tensor3d(bi,[1,size*size,22]),  // flat: [1, cells, 22]
     gi: tf.tensor2d(gi,[1,19])
   };
 }
@@ -590,16 +597,36 @@ async function getAIMove(level) {
 
   return tf.tidy(() => {
     const { bi, gi } = buildInputs(grid, G.turn, G.size, G.komi);
-    const outs = G.model.predict([bi, gi]);
 
-    const policy = (Array.isArray(outs)?outs[0]:outs).dataSync();
-    const value  =  Array.isArray(outs)&&outs.length>1 ? outs[1].dataSync() : null;
+    // GraphModel.execute() — input map ile çağır
+    // Çıktılar: policy_output [1,boardSize,boardSize+1,2], value_output [1,3]
+    const outMap = G.model.execute({
+      'swa_model/bin_inputs':    bi,
+      'swa_model/global_inputs': gi,
+    });
 
-    // Kyu modu: opp/pla swap → ağ geride sandığından yavaş oynar
+    // execute() tek tensor veya map döndürebilir
+    let policyTensor, valueTensor;
+    if (Array.isArray(outMap)) {
+      policyTensor = outMap[0];
+      valueTensor  = outMap.length > 1 ? outMap[1] : null;
+    } else if (outMap instanceof tf.Tensor) {
+      policyTensor = outMap;
+      valueTensor  = null;
+    } else {
+      // named outputs
+      policyTensor = outMap['swa_model/policy_output'] || outMap[Object.keys(outMap)[0]];
+      valueTensor  = outMap['swa_model/value_output']  || null;
+    }
+
+    const policy = policyTensor.flatten().dataSync();
+    const value  = valueTensor ? valueTensor.dataSync() : null;
+
+    // Kyu modu: policy dağılımını ters çevir → daha zayıf oynar
     const eff = level==='kyu' ? policy.map((_,i)=>policy[policy.length-1-i]) : policy;
 
     const move = bestMove(eff);
-    const wr   = value ? (G.turn==='black' ? value[0] : value[1]) : 0.5;
+    const wr   = value ? value[0] : 0.5; // value[0] = siyah kazanma olasılığı
     return { move, winrate: wr };
   });
 }
