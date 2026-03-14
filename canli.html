@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canlı Maç – OGS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700&family=Noto+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  OGS Canlı Maç Entegrasyonu                                  ║
+  ║                                                              ║
+  ║  KURULUM GEREKSİNİMLERİ:                                     ║
+  ║  1. online-go.com/oauth2/applications/ adresine git          ║
+  ║  2. Yeni uygulama oluştur:                                    ║
+  ║     - Client Type: Public                                    ║
+  ║     - Authorization Grant Type: Implicit                     ║
+  ║     - Redirect URI: https://KULLANICI.github.io/REPO/canli.html ║
+  ║  3. CLIENT_ID'yi aşağıya yapıştır                            ║
+  ║                                                              ║
+  ║  API REFERANSLARI:                                           ║
+  ║  REST: https://online-go.com/api/v1/                         ║
+  ║  RT:   https://ogs.readme.io/docs/real-time-api              ║
+  ║  Socket: wss://online-go.com (socket.io)                     ║
+  ╚══════════════════════════════════════════════════════════════╝
+  -->
+
+  <!-- Socket.io (OGS RT API için zorunlu) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    :root {
+      --wood:       #d4a84b;
+      --wood-dark:  #b8861a;
+      --wood-light: #f0d080;
+      --wood-board: #dcb468;
+      --ink:        #1a1008;
+      --paper:      #fdf6e3;
+      --paper-dark: #f0e6c8;
+      --panel-bg:   #faf2dc;
+      --border:     #c9a840;
+      --shadow:     rgba(80,40,0,.18);
+      --green:      #27ae60;
+      --red:        #c0392b;
+      --blue:       #2980b9;
+      --orange:     #e67e22;
+      --muted:      #9a7840;
+      --r:          3px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      min-height:100vh; background:var(--paper);
+      background-image:
+        radial-gradient(ellipse at 10% 5%,  rgba(212,168,75,.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 95%, rgba(184,134,26,.09) 0%, transparent 50%);
+      font-family:'Noto Sans',sans-serif; color:var(--ink);
+      display:flex; flex-direction:column;
+    }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.75rem 1.5rem; background:var(--paper-dark);
+      border-bottom:2px solid var(--border); box-shadow:0 2px 8px var(--shadow);
+      flex-shrink:0; animation:fadeDown .5s ease both;
+    }
+    .topbar-left { display:flex; align-items:center; gap:.75rem; }
+    .back-btn {
+      display:flex; align-items:center; gap:.35rem; text-decoration:none;
+      color:var(--muted); font-size:.82rem; font-weight:600; letter-spacing:.05em;
+      padding:.3rem .7rem; border:1px solid var(--border); border-radius:var(--r);
+      transition:all .15s;
+    }
+    .back-btn:hover { background:var(--wood); color:var(--ink); }
+    .page-title { font-family:'Noto Serif',serif; font-size:1.15rem; font-weight:700; letter-spacing:.06em; }
+
+    .conn-status {
+      display:flex; align-items:center; gap:.5rem;
+      font-size:.78rem; font-weight:600; color:var(--muted);
+    }
+    .cdot { width:9px; height:9px; border-radius:50%; background:#ccc; transition:background .3s; }
+    .cdot.connecting { background:var(--orange); animation:blink 1s infinite; }
+    .cdot.online  { background:var(--green); }
+    .cdot.offline { background:var(--red); }
+
+    /* ── MAIN ── */
+    .main {
+      flex:1; display:grid; grid-template-columns:220px 1fr 220px;
+      gap:1.25rem; max-width:1200px; width:100%;
+      margin:0 auto; padding:1.5rem;
+      animation:fadeUp .5s .1s ease both;
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      background:var(--panel-bg); border:1.5px solid var(--border);
+      border-radius:var(--r); box-shadow:3px 3px 0 var(--wood-dark);
+      padding:1rem; display:flex; flex-direction:column; gap:.9rem;
+    }
+    .panel-title {
+      font-family:'Noto Serif',serif; font-size:.82rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.12em; color:var(--wood-dark);
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+
+    /* ── FORMS ── */
+    .sg { display:flex; flex-direction:column; gap:.35rem; }
+    .sl { font-size:.75rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .sw { position:relative; }
+    .sw::after { content:'▾'; position:absolute; right:.6rem; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; font-size:.75rem; }
+    select {
+      width:100%; background:var(--paper); border:1.5px solid var(--border);
+      border-radius:var(--r); color:var(--ink); font-family:'Noto Sans',sans-serif;
+      font-size:.85rem; padding:.4rem .6rem; cursor:pointer; outline:none;
+      appearance:none; transition:border-color .15s;
+    }
+    select:focus { border-color:var(--wood-dark); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      width:100%; padding:.55rem; border:1.5px solid var(--border); border-radius:var(--r);
+      background:var(--paper); font-family:'Noto Sans',sans-serif;
+      font-size:.82rem; font-weight:600; letter-spacing:.06em;
+      cursor:pointer; transition:all .15s; color:var(--ink);
+    }
+    .btn.primary { background:var(--wood); border-color:var(--wood-dark); }
+    .btn.primary:hover { background:var(--wood-dark); color:#fff; }
+    .btn.danger  { border-color:var(--red); color:var(--red); }
+    .btn.danger:hover  { background:var(--red); color:#fff; }
+    .btn.info    { border-color:var(--blue); color:var(--blue); }
+    .btn:hover:not(.primary):not(.danger):not(.info) { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .btn:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-row { display:flex; gap:.5rem; }
+    .btn-row .btn { font-size:.75rem; }
+
+    /* ── LOGIN EKRANI ── */
+    #login-screen {
+      position:fixed; inset:0; background:rgba(253,246,227,.97);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:1.5rem; z-index:200; padding:2rem;
+    }
+    #login-screen.hidden { display:none; }
+    .login-logo { font-family:'Noto Serif',serif; font-size:2rem; font-weight:700; letter-spacing:.1em; text-align:center; }
+    .login-sub  { font-size:.88rem; color:var(--muted); text-align:center; max-width:340px; line-height:1.6; }
+    .login-card {
+      background:var(--paper-dark); border:2px solid var(--border);
+      border-radius:var(--r); box-shadow:4px 4px 0 var(--wood-dark);
+      padding:2rem; width:100%; max-width:360px;
+      display:flex; flex-direction:column; gap:1rem;
+    }
+    .login-card .card-title { font-family:'Noto Serif',serif; font-size:1.1rem; font-weight:700; margin-bottom:.25rem; }
+
+    /* CLIENT ID input */
+    .input-wrap { position:relative; }
+    input[type=text], input[type=password] {
+      width:100%; background:var(--paper); border:1.5px solid var(--border);
+      border-radius:var(--r); color:var(--ink); font-family:'JetBrains Mono',monospace;
+      font-size:.82rem; padding:.45rem .7rem; outline:none; transition:border-color .15s;
+    }
+    input:focus { border-color:var(--wood-dark); }
+    .input-hint { font-size:.7rem; color:var(--muted); margin-top:.2rem; line-height:1.5; }
+    .input-hint a { color:var(--wood-dark); }
+
+    /* OGS OAUTH Butonu */
+    .ogs-btn {
+      display:flex; align-items:center; justify-content:center; gap:.6rem;
+      padding:.65rem 1.2rem; background:var(--ink);
+      color:#fff; border:none; border-radius:var(--r);
+      font-family:'Noto Sans',sans-serif; font-size:.88rem; font-weight:600;
+      cursor:pointer; transition:all .15s; width:100%;
+      letter-spacing:.04em;
+    }
+    .ogs-btn:hover { background:#3a2010; }
+    .ogs-btn svg { width:18px; height:18px; fill:#fff; flex-shrink:0; }
+
+    /* ── PROFIL KARTI ── */
+    .profile-card {
+      display:flex; align-items:center; gap:.65rem;
+      background:var(--paper); border:1px solid var(--border);
+      border-radius:var(--r); padding:.6rem .75rem;
+    }
+    .avatar {
+      width:36px; height:36px; border-radius:50%;
+      background:var(--wood-light); border:2px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:.85rem; color:var(--wood-dark);
+      overflow:hidden; flex-shrink:0;
+    }
+    .avatar img { width:100%; height:100%; object-fit:cover; }
+    .profile-info { display:flex; flex-direction:column; }
+    .profile-name { font-weight:700; font-size:.88rem; }
+    .profile-rank { font-size:.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+    /* ── RAKIP KARTI ── */
+    .opp-card {
+      background:var(--paper); border:1px solid var(--border);
+      border-radius:var(--r); padding:.7rem;
+    }
+    .opp-label { font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.35rem; }
+    .opp-name  { font-weight:700; font-size:.9rem; }
+    .opp-rank  { font-size:.75rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+    /* ── SAAT ── */
+    .clock-wrap {
+      display:flex; gap:.5rem;
+    }
+    .clock-box {
+      flex:1; background:var(--paper); border:1.5px solid var(--border);
+      border-radius:var(--r); padding:.5rem; text-align:center;
+    }
+    .clock-box.active { border-color:var(--wood-dark); background:var(--wood-light); }
+    .clock-box.danger { border-color:var(--red); background:#fff5f5; animation:pulse-clock .8s infinite; }
+    .clock-player { font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .clock-stone  { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:.25rem; }
+    .clock-stone.b { background:radial-gradient(circle at 35% 30%,#555,#111); }
+    .clock-stone.w { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .clock-time   { font-family:'JetBrains Mono',monospace; font-size:1.15rem; font-weight:700; }
+    .clock-periods { font-size:.65rem; color:var(--muted); }
+
+    /* ── TAHTA ── */
+    .board-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.75rem; }
+    .board-container {
+      position:relative; width:100%; max-width:580px; aspect-ratio:1;
+      background:var(--wood-board); border:3px solid var(--wood-dark); border-radius:var(--r);
+      box-shadow:5px 5px 0 var(--wood-dark),0 10px 30px var(--shadow); overflow:hidden;
+    }
+    #goban { width:100%; height:100%; display:block; cursor:crosshair; }
+
+    /* PHASE OVERLAY */
+    #phase-overlay {
+      display:none; position:absolute; inset:0;
+      background:rgba(253,246,227,.93);
+      align-items:center; justify-content:center; flex-direction:column;
+      gap:1rem; z-index:10; padding:2rem; text-align:center;
+    }
+    #phase-overlay.show { display:flex; }
+    .phase-title { font-family:'Noto Serif',serif; font-size:1.6rem; font-weight:700; }
+    .phase-sub   { font-size:.9rem; color:var(--muted); max-width:280px; line-height:1.6; }
+
+    /* TURN INDICATOR */
+    .turn-ind { display:flex; align-items:center; gap:.6rem; font-size:.85rem; font-weight:600; color:var(--muted); }
+    .turn-stone { width:20px; height:20px; border-radius:50%; }
+    .turn-stone.black { background:radial-gradient(circle at 35% 30%,#555,#111); box-shadow:0 2px 4px rgba(0,0,0,.4); }
+    .turn-stone.white { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .your-turn-badge {
+      display:none; padding:.2rem .6rem; border-radius:20px;
+      background:var(--green); color:#fff; font-size:.72rem; font-weight:700;
+      letter-spacing:.06em; text-transform:uppercase;
+    }
+    .your-turn-badge.show { display:inline-block; animation:pulse-badge 1.5s infinite; }
+
+    /* ── SAĞ PANEL ── */
+    .score-row {
+      display:flex; justify-content:space-around;
+      background:var(--paper); border:1px solid var(--border); border-radius:var(--r); padding:.6rem;
+    }
+    .score-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+    .score-stone { width:14px; height:14px; border-radius:50%; }
+    .score-stone.b { background:radial-gradient(circle at 35% 30%,#555,#111); }
+    .score-stone.w { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .score-val { font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:500; }
+    .score-lbl { font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+
+    /* CHAT */
+    #chat-log {
+      flex:1; overflow-y:auto; background:var(--paper);
+      border:1px solid var(--border); border-radius:var(--r);
+      padding:.5rem; max-height:200px;
+      font-size:.75rem; display:flex; flex-direction:column; gap:.25rem;
+    }
+    .chat-msg { line-height:1.5; }
+    .chat-msg .cm-user { font-weight:700; color:var(--wood-dark); }
+    .chat-msg .cm-sys  { color:var(--muted); font-style:italic; }
+    .chat-msg .cm-text { color:var(--ink); }
+
+    .chat-input-wrap { display:flex; gap:.4rem; }
+    .chat-input-wrap input {
+      flex:1; font-family:'Noto Sans',sans-serif; font-size:.8rem;
+    }
+    .chat-input-wrap button {
+      padding:.3rem .7rem; font-size:.75rem; font-weight:600;
+      background:var(--wood); border:1.5px solid var(--wood-dark);
+      border-radius:var(--r); cursor:pointer; color:var(--ink);
+    }
+    .chat-input-wrap button:hover { background:var(--wood-dark); color:#fff; }
+
+    /* HAMLE LİSTESİ */
+    #move-list {
+      overflow-y:auto; background:var(--paper); border:1px solid var(--border);
+      border-radius:var(--r); padding:.5rem; max-height:160px;
+      font-family:'JetBrains Mono',monospace; font-size:.72rem;
+    }
+    .me { display:flex; align-items:center; gap:.4rem; padding:.15rem .3rem; border-radius:2px; }
+    .me.cur { background:var(--wood-light); font-weight:600; }
+    .mn { color:var(--muted); min-width:22px; }
+    .mp { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .mp.b { background:#111; }
+    .mp.w { background:#ddd; border:1px solid #aaa; }
+
+    /* ── CHALLENGE MODAL ── */
+    #challenge-modal {
+      display:none; position:fixed; inset:0;
+      background:rgba(26,16,8,.55); align-items:center; justify-content:center; z-index:300;
+    }
+    #challenge-modal.show { display:flex; }
+    .modal-card {
+      background:var(--paper); border:2px solid var(--border);
+      border-radius:var(--r); box-shadow:5px 5px 0 var(--wood-dark);
+      padding:1.75rem; width:100%; max-width:340px;
+    }
+    .modal-title { font-family:'Noto Serif',serif; font-size:1.2rem; font-weight:700; margin-bottom:1rem; }
+    .modal-body  { display:flex; flex-direction:column; gap:.85rem; margin-bottom:1.25rem; }
+    .modal-btns  { display:flex; gap:.6rem; }
+
+    /* ── ANIMASYONLAR ── */
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes pulse-badge   { 0%,100%{opacity:1} 50%{opacity:.6} }
+    @keyframes pulse-clock   { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+    #chat-log::-webkit-scrollbar, #move-list::-webkit-scrollbar { width:4px; }
+    #chat-log::-webkit-scrollbar-thumb, #move-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+    @media(max-width:900px) { .main{grid-template-columns:1fr} .board-container{max-width:480px} }
+    @media(max-width:540px) { .topbar{padding:.6rem 1rem} .main{padding:1rem .75rem} }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN EKRANI ══ -->
+<div id="login-screen">
+  <div class="login-logo">围棋 · OGS<br/><span style="font-size:1rem;color:var(--muted)">Canlı Maç</span></div>
+  <div class="login-sub">OGS hesabınla giriş yap ve gerçek rakiplerle oyna.</div>
+
+  <div class="login-card">
+    <div class="card-title">OGS ile Giriş Yap</div>
+
+    <div class="sg">
+      <div class="sl">OGS Client ID</div>
+      <div class="input-wrap">
+        <input type="text" id="client-id-input" placeholder="Örn: abc123xyz..." />
+      </div>
+      <div class="input-hint">
+        <a href="https://online-go.com/oauth2/applications/" target="_blank">online-go.com/oauth2/applications/</a>
+        adresinden al.<br/>
+        Grant Type: <strong>Implicit</strong> · Client Type: <strong>Public</strong><br/>
+        Redirect URI: <code id="redirect-uri-display"></code>
+      </div>
+    </div>
+
+    <button class="ogs-btn" onclick="startOAuthFlow()">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      OGS ile Giriş Yap
+    </button>
+
+    <div id="login-error" style="display:none;color:var(--red);font-size:.78rem;"></div>
+
+    <div style="border-top:1px solid var(--border);padding-top:.75rem;">
+      <div style="font-size:.72rem;color:var(--muted);line-height:1.7;">
+        <strong>Client ID nerede?</strong><br/>
+        1. OGS'e giriş yap<br/>
+        2. oauth2/applications/ → Yeni Uygulama<br/>
+        3. Grant Type: <strong>Implicit</strong> seç<br/>
+        4. Client ID'yi buraya yapıştır
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CHALLENGE MODAL ══ -->
+<div id="challenge-modal">
+  <div class="modal-card">
+    <div class="modal-title">Yeni Maç Oluştur</div>
+    <div class="modal-body">
+      <div class="sg">
+        <div class="sl">Tahta Boyutu</div>
+        <div class="sw">
+          <select id="ch-size">
+            <option value="19" selected>19×19</option>
+            <option value="13">13×13</option>
+            <option value="9">9×9</option>
+          </select>
+        </div>
+      </div>
+      <div class="sg">
+        <div class="sl">Zaman Kontrolü</div>
+        <div class="sw">
+          <select id="ch-time">
+            <option value="blitz">Blitz (3 dk)</option>
+            <option value="live" selected>Canlı (10 dk)</option>
+            <option value="correspondence">Yazışma (3 gün)</option>
+          </select>
+        </div>
+      </div>
+      <div class="sg">
+        <div class="sl">Renk</div>
+        <div class="sw">
+          <select id="ch-color">
+            <option value="automatic" selected>Otomatik</option>
+            <option value="black">Siyah</option>
+            <option value="white">Beyaz</option>
+          </select>
+        </div>
+      </div>
+      <div class="sg">
+        <div class="sl">Komi</div>
+        <div class="sw">
+          <select id="ch-komi">
+            <option value="automatic" selected>Otomatik (6.5)</option>
+            <option value="0">0</option>
+            <option value="7.5">7.5</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeChallenge()" style="flex:1">İptal</button>
+      <button class="btn primary" onclick="sendChallenge()" style="flex:1">Maç Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOPBAR ══ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="index.html">← Ana Sayfa</a>
+    <span class="page-title">Canlı Maç</span>
+    <span style="font-size:.72rem;color:var(--muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:.2rem .6rem;border:1.5px solid var(--border);border-radius:20px;">OGS</span>
+  </div>
+  <div class="conn-status">
+    <div class="cdot connecting" id="cdot"></div>
+    <span id="clabel">Bağlanılıyor…</span>
+    <button class="btn" id="logout-btn" onclick="logout()"
+            style="display:none;width:auto;padding:.25rem .7rem;font-size:.72rem;">Çıkış</button>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+
+  <!-- SOL PANEL -->
+  <div class="panel">
+    <div class="panel-title">Oyun</div>
+
+    <!-- Profil -->
+    <div id="profile-area" style="display:none">
+      <div class="sl" style="margin-bottom:.35rem">Hesabım</div>
+      <div class="profile-card">
+        <div class="avatar" id="my-avatar">?</div>
+        <div class="profile-info">
+          <div class="profile-name" id="my-name">—</div>
+          <div class="profile-rank" id="my-rank">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rakip -->
+    <div id="opp-area" style="display:none">
+      <div class="sl" style="margin-bottom:.35rem">Rakip</div>
+      <div class="opp-card">
+        <div class="opp-label">Rakip</div>
+        <div class="opp-name" id="opp-name">Bekleniyor…</div>
+        <div class="opp-rank" id="opp-rank"></div>
+      </div>
+    </div>
+
+    <!-- Saatler -->
+    <div id="clocks-area" style="display:none">
+      <div class="sl" style="margin-bottom:.35rem">Saat</div>
+      <div class="clock-wrap">
+        <div class="clock-box" id="clock-black">
+          <div class="clock-player"><span class="clock-stone b"></span>Siyah</div>
+          <div class="clock-time" id="clock-b-time">—</div>
+          <div class="clock-periods" id="clock-b-per"></div>
+        </div>
+        <div class="clock-box" id="clock-white">
+          <div class="clock-player"><span class="clock-stone w"></span>Beyaz</div>
+          <div class="clock-time" id="clock-w-time">—</div>
+          <div class="clock-periods" id="clock-w-per"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Maç butonları -->
+    <div id="lobby-btns">
+      <button class="btn primary" id="new-game-btn" onclick="openChallenge()" disabled>
+        + Yeni Maç Oluştur
+      </button>
+    </div>
+
+    <div id="game-btns" style="display:none">
+      <div class="btn-row" style="margin-bottom:.5rem">
+        <button class="btn" onclick="sendPass()" id="pass-btn">Pas Geç</button>
+        <button class="btn" onclick="sendUndo()" id="undo-btn">Geri Al İste</button>
+      </div>
+      <button class="btn danger" onclick="sendResign()" id="resign-btn">Teslim Ol</button>
+    </div>
+
+    <!-- Aktif oyunlar -->
+    <div id="active-games-area">
+      <div class="sl" style="margin-bottom:.35rem">Aktif Oyunlarım</div>
+      <div id="active-games-list" style="display:flex;flex-direction:column;gap:.4rem;font-size:.78rem;">
+        <div style="color:var(--muted);font-style:italic">Oyun yok</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORTA: TAHTA -->
+  <div class="board-wrap">
+    <div class="turn-ind">
+      <div class="turn-stone black" id="turn-stone"></div>
+      <span id="turn-text">Oyun bekleniyor</span>
+      <span class="your-turn-badge" id="your-turn-badge">SENİN SIRAN!</span>
+    </div>
+
+    <div class="board-container">
+      <canvas id="goban"></canvas>
+      <div id="phase-overlay">
+        <div class="phase-title" id="phase-title">Bekleniyor</div>
+        <div class="phase-sub"  id="phase-sub"></div>
+        <button class="btn primary" id="phase-btn" onclick="phaseAction()" style="width:180px;display:none">Tamam</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.5rem;width:100%;max-width:580px;font-size:.78rem;color:var(--muted);justify-content:center;">
+      <span id="game-info-bar">Maç oluşturmak için "Yeni Maç" butonuna tıkla</span>
+    </div>
+  </div>
+
+  <!-- SAĞ PANEL -->
+  <div class="panel">
+    <div class="panel-title">Bilgi</div>
+
+    <div class="score-row">
+      <div class="score-item">
+        <div class="score-stone b"></div>
+        <div class="score-val" id="cap-b">0</div>
+        <div class="score-lbl">Tutsak</div>
+      </div>
+      <div class="score-item">
+        <div class="score-stone w"></div>
+        <div class="score-val" id="cap-w">0</div>
+        <div class="score-lbl">Tutsak</div>
+      </div>
+      <div class="score-item">
+        <div style="font-size:.9rem;color:var(--muted)">±</div>
+        <div class="score-val" id="move-num">0</div>
+        <div class="score-lbl">Hamle</div>
+      </div>
+    </div>
+
+    <!-- Oyun bilgisi -->
+    <div class="sg">
+      <div class="sl">Oyun Detayı</div>
+      <div id="game-detail" style="font-size:.75rem;font-family:'JetBrains Mono',monospace;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:.5rem;line-height:1.8;color:var(--muted);">
+        Oyun bekleniyor…
+      </div>
+    </div>
+
+    <!-- Hamle listesi -->
+    <div class="sg" style="flex:1;min-height:0">
+      <div class="sl">Hamleler</div>
+      <div id="move-list"></div>
+    </div>
+
+    <!-- Chat -->
+    <div class="sg" style="flex:1;min-height:0">
+      <div class="sl">Sohbet</div>
+      <div id="chat-log">
+        <div class="chat-msg"><span class="cm-sys">OGS'e bağlanmak için giriş yap.</span></div>
+      </div>
+      <div class="chat-input-wrap">
+        <input type="text" id="chat-input" placeholder="Mesaj…" onkeydown="if(event.key==='Enter')sendChat()" disabled />
+        <button onclick="sendChat()" id="chat-send-btn" disabled>Gönder</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+
+<script>
+/* ═══════════════════════════════════════════════════
+   YAPILANDIRMA — Kendi bilgilerinizi girin
+═══════════════════════════════════════════════════ */
+const OGS_BASE    = 'https://online-go.com';
+const OGS_SOCKET  = 'https://online-go.com';  // socket.io endpoint
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+// Sayfa yüklendiğinde redirect URI'yi göster
+document.getElementById('redirect-uri-display').textContent = REDIRECT_URI;
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+const OGS = {
+  token:     null,   // OAuth access token
+  user:      null,   // { id, username, ranking, icon_url }
+  chatAuth:  null,
+  notifyAuth:null,
+  socket:    null,   // socket.io instance
+  game:      null,   // aktif oyun verisi
+  gameId:    null,
+  myColor:   null,   // 'black' | 'white'
+  gameAuth:  null,   // game-specific auth token
+  gameChatAuth: null,
+  clockInterval: null,
+  clockData: null,
+};
+
+/* ═══════════════════════════════════════════════════
+   CANVAS TAHTA
+═══════════════════════════════════════════════════ */
+const LTRS = 'ABCDEFGHJKLMNOPQRST';
+let boardSize = 19;
+let boardGrid = [];
+let lastXY    = null;
+let moveHistory = [];
+
+function initCanvas(size) {
+  boardSize = size;
+  boardGrid = Array.from({length:size}, ()=>Array(size).fill(null));
+  lastXY = null;
+  moveHistory = [];
+
+  const cv = document.getElementById('goban');
+  const wrap = cv.parentElement;
+  const fit = () => {
+    const r = wrap.getBoundingClientRect();
+    cv.width  = r.width  || 560;
+    cv.height = r.height || 560;
+    drawBoard();
+  };
+  setTimeout(fit, 50);
+  window.addEventListener('resize', fit);
+
+  cv.onclick = e => {
+    if (!OGS.game || !OGS.myColor) return;
+    const myTurn = OGS.game.phase === 'play' &&
+      ((OGS.game.moves.length % 2 === 0 && OGS.myColor === 'black') ||
+       (OGS.game.moves.length % 2 === 1 && OGS.myColor === 'white'));
+    if (!myTurn) return;
+
+    const rect = cv.getBoundingClientRect();
+    const sx = cv.width/rect.width, sy = cv.height/rect.height;
+    const cx = (e.clientX-rect.left)*sx, cy = (e.clientY-rect.top)*sy;
+    const {m,st} = met(cv.width);
+    const xi = Math.round((cx-m)/st), yi = Math.round((cy-m)/st);
+    if (xi<0||yi<0||xi>=boardSize||yi>=boardSize) return;
+    if (boardGrid[yi][xi]) return;
+    placeMove(xi, yi);
+  };
+}
+
+function met(s) { const m=s*.06,st=(s-m*2)/(boardSize-1); return{m,st}; }
+
+function drawBoard() {
+  const cv = document.getElementById('goban');
+  if (!cv.width) return;
+  const ctx = cv.getContext('2d');
+  const s = cv.width; const {m,st} = met(s);
+
+  ctx.fillStyle='#dcb468'; ctx.fillRect(0,0,s,s);
+  const g=ctx.createLinearGradient(0,0,s,s);
+  g.addColorStop(0,'rgba(255,220,120,.18)'); g.addColorStop(1,'rgba(140,80,0,.10)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,s,s);
+
+  ctx.strokeStyle='#7a5010'; ctx.lineWidth=1;
+  for (let i=0;i<boardSize;i++){
+    const px=m+i*st,py=m+i*st;
+    ctx.beginPath();ctx.moveTo(px,m);ctx.lineTo(px,m+(boardSize-1)*st);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(m,py);ctx.lineTo(m+(boardSize-1)*st,py);ctx.stroke();
+  }
+  ctx.fillStyle='#7a5010';
+  for(const[sx2,sy2] of stars(boardSize)){
+    ctx.beginPath();ctx.arc(m+sx2*st,m+sy2*st,st*.09,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#7a5010';
+  ctx.font=`${Math.max(9,st*.32)}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<boardSize;i++){
+    const px=m+i*st;
+    ctx.fillText(LTRS[i],px,m*.45);ctx.fillText(LTRS[i],px,s-m*.45);
+    ctx.fillText(String(boardSize-i),m*.45,m+i*st);ctx.fillText(String(boardSize-i),s-m*.45,m+i*st);
+  }
+  for(let y=0;y<boardSize;y++)
+    for(let x=0;x<boardSize;x++)
+      if(boardGrid[y][x])
+        drawStone(ctx,m+x*st,m+y*st,st*.46,boardGrid[y][x],lastXY&&lastXY[0]===x&&lastXY[1]===y);
+}
+
+function drawStone(ctx,cx,cy,r,col,mark){
+  ctx.save();
+  if(col==='black'){
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#555');g.addColorStop(1,'#111');ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=4;ctx.shadowOffsetX=2;ctx.shadowOffsetY=2;
+  }else{
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#fff');g.addColorStop(1,'#ccc');ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.3)';ctx.shadowBlur=3;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;
+  }
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  if(col==='white'){ctx.strokeStyle='#aaa';ctx.lineWidth=.5;ctx.stroke();}
+  if(mark){
+    ctx.shadowColor='transparent';
+    ctx.strokeStyle=col==='black'?'rgba(255,255,255,.7)':'rgba(0,0,0,.5)';
+    ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,r*.38,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function stars(sz){
+  if(sz===19)return[[3,3],[9,3],[15,3],[3,9],[9,9],[15,9],[3,15],[9,15],[15,15]];
+  if(sz===13)return[[3,3],[9,3],[3,9],[9,9],[6,6]];
+  return[[2,2],[6,2],[4,4],[2,6],[6,6]];
+}
+
+/* ── OGS koordinat dönüşümleri ──
+   OGS hamleleri [x,y] formatında, a=0, b=1... 
+   Tahta sol-üst (0,0)
+*/
+function ogsToXY(move) {
+  // move: [x, y, timestamp?]  (OGS array format)
+  if (!Array.isArray(move)) return null;
+  return [move[0], move[1]];
+}
+
+function xyToOgs(x, y) {
+  // SGF formatı: "ab" = [0,1]
+  return String.fromCharCode(97+x) + String.fromCharCode(97+y);
+}
+
+/* ═══════════════════════════════════════════════════
+   OAUTH2 — IMPLICIT FLOW
+   GitHub Pages → backend yok → Implicit flow kullan
+═══════════════════════════════════════════════════ */
+
+function startOAuthFlow() {
+  const clientId = document.getElementById('client-id-input').value.trim();
+  if (!clientId) {
+    showLoginError('Lütfen Client ID girin.');
+    return;
+  }
+  // Client ID'yi session'a kaydet
+  sessionStorage.setItem('ogs_client_id', clientId);
+
+  const params = new URLSearchParams({
+    response_type: 'token',
+    client_id:     clientId,
+    redirect_uri:  REDIRECT_URI,
+  });
+
+  window.location.href = `${OGS_BASE}/oauth2/authorize/?${params}`;
+}
+
+function handleOAuthCallback() {
+  // URL fragment'tan token'ı al (#access_token=...&token_type=Bearer)
+  const hash = window.location.hash.slice(1);
+  if (!hash) return false;
+
+  const params = new URLSearchParams(hash);
+  const token  = params.get('access_token');
+  if (!token) return false;
+
+  OGS.token = token;
+  sessionStorage.setItem('ogs_token', token);
+
+  // Hash'i URL'den temizle
+  history.replaceState(null, '', window.location.pathname);
+  return true;
+}
+
+function checkStoredToken() {
+  const t = sessionStorage.getItem('ogs_token');
+  if (t) { OGS.token = t; return true; }
+  return false;
+}
+
+/* ═══════════════════════════════════════════════════
+   REST API
+═══════════════════════════════════════════════════ */
+async function ogsGet(path) {
+  const r = await fetch(`${OGS_BASE}/api/v1${path}`, {
+    headers: { Authorization: `Bearer ${OGS.token}` }
+  });
+  if (!r.ok) throw new Error(`GET ${path}: ${r.status}`);
+  return r.json();
+}
+
+async function ogsPost(path, body={}) {
+  const r = await fetch(`${OGS_BASE}/api/v1${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OGS.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`POST ${path}: ${r.status}`);
+  return r.json().catch(()=>({}));
+}
+
+async function fetchUserConfig() {
+  // ui/config → user bilgisi + auth token'ları
+  const cfg = await ogsGet('/ui/config');
+  OGS.user       = cfg.user;
+  OGS.chatAuth   = cfg.chat_auth;
+  OGS.notifyAuth = cfg.notification_auth;
+  return cfg;
+}
+
+async function fetchActiveGames() {
+  const data = await ogsGet('/ui/overview');
+  return data.active_games || [];
+}
+
+async function fetchGameData(gameId) {
+  return ogsGet(`/games/${gameId}`);
+}
+
+/* ═══════════════════════════════════════════════════
+   SOCKET.IO — GERÇEK ZAMANLI API
+   Ref: https://ogs.readme.io/docs/real-time-api
+═══════════════════════════════════════════════════ */
+function connectSocket() {
+  setConnStatus('connecting','Bağlanılıyor…');
+
+  OGS.socket = io(OGS_SOCKET, {
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionDelay: 1500,
+  });
+
+  OGS.socket.on('connect', onSocketConnect);
+  OGS.socket.on('disconnect', ()=>setConnStatus('offline','Bağlantı kesildi'));
+  OGS.socket.on('connect_error', ()=>setConnStatus('offline','Bağlantı hatası'));
+
+  // Aktif oyun bildirimleri
+  OGS.socket.on('active-game', onActiveGame);
+
+  // Bildirimler (challenge vs)
+  OGS.socket.on('notification', onNotification);
+}
+
+async function onSocketConnect() {
+  setConnStatus('online',`Bağlı · ${OGS.user.username}`);
+
+  // 1) Bildirim bağlantısı
+  OGS.socket.emit('notification/connect', {
+    player_id: OGS.user.id,
+    username:  OGS.user.username,
+    auth:      OGS.notifyAuth,
+  });
+
+  // 2) Chat bağlantısı
+  OGS.socket.emit('chat/connect', {
+    player_id: OGS.user.id,
+    username:  OGS.user.username,
+    auth:      OGS.chatAuth,
+  });
+
+  // 3) Authenticate (hamle için zorunlu)
+  OGS.socket.emit('authenticate', {
+    player_id: OGS.user.id,
+    username:  OGS.user.username,
+    auth:      OGS.chatAuth,
+  });
+
+  // 4) Ping döngüsü (bağlantı canlı tut)
+  startPing();
+
+  // 5) Aktif oyunları yükle
+  await loadActiveGames();
+}
+
+let pingInterval = null;
+function startPing() {
+  if (pingInterval) clearInterval(pingInterval);
+  pingInterval = setInterval(()=>{
+    if (OGS.socket?.connected)
+      OGS.socket.emit('net/ping', { client: Date.now() });
+  }, 20000);
+}
+
+/* ── Aktif oyunlar ── */
+async function loadActiveGames() {
+  try {
+    const games = await fetchActiveGames();
+    renderActiveGames(games);
+  } catch(e) { console.warn('Aktif oyunlar alınamadı:', e); }
+}
+
+function renderActiveGames(games) {
+  const el = document.getElementById('active-games-list');
+  if (!games.length) {
+    el.innerHTML='<div style="color:var(--muted);font-style:italic">Aktif oyun yok</div>';
+    return;
+  }
+  el.innerHTML = '';
+  games.forEach(g=>{
+    const opp = g.black.id === OGS.user.id ? g.white : g.black;
+    const myTurn = g.json?.clock?.current_player === OGS.user.id;
+    const d = document.createElement('div');
+    d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:.4rem .5rem;background:var(--paper);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:background .1s;';
+    d.innerHTML=`<span style="font-weight:600">${opp.username}</span>
+      ${myTurn?'<span style="color:var(--green);font-size:.7rem;font-weight:700">SENİN SIRAN</span>':'<span style="color:var(--muted);font-size:.7rem">Bekleniyor</span>'}`;
+    d.onmouseenter=()=>d.style.background='var(--paper-dark)';
+    d.onmouseleave=()=>d.style.background='var(--paper)';
+    d.onclick=()=>joinGame(g.id);
+    el.appendChild(d);
+  });
+}
+
+/* ── Oyuna katıl ── */
+async function joinGame(gameId) {
+  if (OGS.gameId === gameId) return;
+  if (OGS.gameId) disconnectCurrentGame();
+
+  OGS.gameId = gameId;
+  sysChat(`Oyuna bağlanılıyor… (ID: ${gameId})`);
+
+  // REST'ten auth tokenları al
+  try {
+    const gd = await fetchGameData(gameId);
+    OGS.gameAuth     = gd.auth;
+    OGS.gameChatAuth = gd.game_chat_auth;
+  } catch(e) { console.warn('Game auth alınamadı:', e); }
+
+  // Socket'e bağlan
+  OGS.socket.emit('game/connect', { game_id: gameId });
+  OGS.socket.emit('chat/join', { channel: `game-${gameId}` });
+
+  // Game event dinleyicileri
+  OGS.socket.on(`game/${gameId}/gamedata`,       onGameData);
+  OGS.socket.on(`game/${gameId}/move`,           onGameMove);
+  OGS.socket.on(`game/${gameId}/clock`,          onGameClock);
+  OGS.socket.on(`game/${gameId}/phase`,          onGamePhase);
+  OGS.socket.on(`game/${gameId}/chat`,           onGameChat);
+  OGS.socket.on(`game/${gameId}/error`,          onGameError);
+  OGS.socket.on(`game/${gameId}/reset`,          ()=>joinGame(gameId));
+  OGS.socket.on(`game/${gameId}/undo_requested`, onUndoRequested);
+  OGS.socket.on(`game/${gameId}/undo_accepted`,  onUndoAccepted);
+}
+
+function disconnectCurrentGame() {
+  if (!OGS.gameId) return;
+  OGS.socket.emit('game/disconnect', { game_id: OGS.gameId });
+  OGS.socket.off(`game/${OGS.gameId}/gamedata`);
+  OGS.socket.off(`game/${OGS.gameId}/move`);
+  OGS.socket.off(`game/${OGS.gameId}/clock`);
+  OGS.socket.off(`game/${OGS.gameId}/phase`);
+  OGS.socket.off(`game/${OGS.gameId}/chat`);
+  OGS.socket.off(`game/${OGS.gameId}/error`);
+  OGS.socket.off(`game/${OGS.gameId}/reset`);
+  OGS.socket.off(`game/${OGS.gameId}/undo_requested`);
+  OGS.socket.off(`game/${OGS.gameId}/undo_accepted`);
+  if (OGS.clockInterval) clearInterval(OGS.clockInterval);
+  OGS.gameId = null;
+}
+
+/* ── Game Events ── */
+function onGameData(data) {
+  OGS.game = data;
+  const sz = data.width || 19;
+  initCanvas(sz);
+
+  // Hangi renk biz?
+  if (data.players?.black?.id === OGS.user?.id)      OGS.myColor = 'black';
+  else if (data.players?.white?.id === OGS.user?.id) OGS.myColor = 'white';
+  else OGS.myColor = null; // izleme modu
+
+  // Rakip
+  const oppPlayer = OGS.myColor==='black' ? data.players?.white : data.players?.black;
+  document.getElementById('opp-area').style.display='block';
+  document.getElementById('opp-name').textContent = oppPlayer?.username || '—';
+  document.getElementById('opp-rank').textContent = rankLabel(oppPlayer?.ranking);
+
+  // Tüm hamleleri tekrar oyna
+  boardGrid = Array.from({length:sz}, ()=>Array(sz).fill(null));
+  moveHistory = [];
+  const moves = data.moves || [];
+  moves.forEach((mv,i)=>{
+    const color = i%2===0 ? 'black' : 'white';
+    if (mv[0]===-1) { moveHistory.push({color,coord:'PAS'}); return; } // pas
+    const [x,y] = [mv[0],mv[1]];
+    boardGrid[y][x] = color;
+    lastXY=[x,y];
+    moveHistory.push({color,coord:LTRS[x]+(sz-y)});
+  });
+  drawBoard();
+  renderMoveList();
+  updateGameUI(data, moves.length);
+
+  // Game/lobby butonları
+  document.getElementById('lobby-btns').style.display='none';
+  document.getElementById('game-btns').style.display='block';
+  document.getElementById('clocks-area').style.display='block';
+  document.getElementById('opp-area').style.display='block';
+
+  // Oyun detayı
+  document.getElementById('game-detail').innerHTML=
+    `Boyut: ${sz}×${sz}<br/>Komi: ${data.komi}<br/>Kural: ${data.rules||'—'}<br/>ID: ${OGS.gameId}`;
+
+  sysChat('Oyun yüklendi.');
+  document.getElementById('chat-input').disabled = false;
+  document.getElementById('chat-send-btn').disabled = false;
+
+  if (data.phase !== 'play') showPhase(data.phase, data);
+}
+
+function onGameMove(data) {
+  // data: { move_number, move: [x,y,ts] }
+  if (!OGS.game) return;
+  const mn = data.move_number - 1; // 0-indexed
+  const color = mn%2===0 ? 'black' : 'white';
+  const mv = data.move;
+
+  if (mv[0] === -1) {
+    moveHistory.push({color,coord:'PAS'});
+    sysChat(`${color==='black'?'Siyah':'Beyaz'} pas geçti.`);
+  } else {
+    const [x,y] = [mv[0],mv[1]];
+    boardGrid[y][x] = color;
+    lastXY=[x,y];
+    moveHistory.push({color,coord:LTRS[x]+(boardSize-y)});
+    drawBoard();
+  }
+
+  OGS.game.moves = OGS.game.moves || [];
+  OGS.game.moves.push(mv);
+  document.getElementById('move-num').textContent = OGS.game.moves.length;
+  renderMoveList();
+  updateGameUI(OGS.game, OGS.game.moves.length);
+}
+
+function onGameClock(data) {
+  OGS.clockData = data;
+  renderClock(data);
+}
+
+function onGamePhase(phase) {
+  if (OGS.game) OGS.game.phase = phase;
+  showPhase(phase, OGS.game);
+  if (phase === 'finished') {
+    document.getElementById('game-btns').style.display='none';
+    document.getElementById('lobby-btns').style.display='block';
+    if (OGS.clockInterval) clearInterval(OGS.clockInterval);
+  }
+}
+
+function onGameChat(data) {
+  const msg = data.message || data;
+  const username = msg.username || 'Sistem';
+  const body = typeof msg.body === 'string' ? msg.body : JSON.stringify(msg.body);
+  addChat(username, body);
+}
+
+function onGameError(msg) {
+  sysChat(`⚠️ Hata: ${msg}`);
+}
+
+function onUndoRequested(moveNum) {
+  sysChat(`Geri alma isteği alındı (hamle ${moveNum}).`);
+  if (OGS.myColor && confirm('Rakip hamleyi geri almak istiyor. Kabul et?')) {
+    OGS.socket.emit('game/undo/accept', {
+      auth:        OGS.gameAuth,
+      game_id:     OGS.gameId,
+      player_id:   OGS.user.id,
+      move_number: moveNum,
+    });
+  }
+}
+
+function onUndoAccepted(moveNum) {
+  sysChat('Hamle geri alındı.');
+  // Son hamleyi sil
+  if (moveHistory.length && boardGrid) {
+    const last = moveHistory.pop();
+    if (last.coord !== 'PAS') {
+      const x = LTRS.indexOf(last.coord[0]);
+      const y = boardSize - parseInt(last.coord.slice(1));
+      if (x>=0) boardGrid[y][x] = null;
+    }
+    lastXY = null;
+    drawBoard();
+    renderMoveList();
+  }
+}
+
+function onActiveGame(data) {
+  // Aktif oyun listesini güncelle
+  loadActiveGames();
+}
+
+function onNotification(data) {
+  if (data.type === 'challenge') {
+    sysChat(`Meydan okuma: ${data.challenger?.username} oyuna davet etti.`);
+    // Otomatik kabul seçeneği eklenebilir
+  }
+}
+
+/* ── HAMLE GÖNDER ── */
+function placeMove(x, y) {
+  if (!OGS.gameId || !OGS.gameAuth) return;
+  const move = xyToOgs(x, y);
+  OGS.socket.emit('game/move', {
+    auth:      OGS.gameAuth,
+    game_id:   OGS.gameId,
+    player_id: OGS.user.id,
+    move:      move,
+  });
+}
+
+function sendPass() {
+  if (!OGS.gameId || !OGS.gameAuth) return;
+  OGS.socket.emit('game/move', {
+    auth:      OGS.gameAuth,
+    game_id:   OGS.gameId,
+    player_id: OGS.user.id,
+    move:      '..', // OGS pas kodu
+  });
+}
+
+function sendResign() {
+  if (!OGS.gameId || !OGS.gameAuth) return;
+  if (!confirm('Teslim olmak istediğinize emin misiniz?')) return;
+  OGS.socket.emit('game/resign', {
+    auth:      OGS.gameAuth,
+    game_id:   OGS.gameId,
+    player_id: OGS.user.id,
+  });
+}
+
+function sendUndo() {
+  if (!OGS.gameId || !OGS.gameAuth) return;
+  const mn = (OGS.game?.moves?.length) || 0;
+  OGS.socket.emit('game/undo/request', {
+    auth:        OGS.gameAuth,
+    game_id:     OGS.gameId,
+    player_id:   OGS.user.id,
+    move_number: mn,
+  });
+  sysChat('Geri alma isteği gönderildi.');
+}
+
+/* ── CHALLENGE (Meydan Okuma) ── */
+function openChallenge()  { document.getElementById('challenge-modal').classList.add('show'); }
+function closeChallenge() { document.getElementById('challenge-modal').classList.remove('show'); }
+
+async function sendChallenge() {
+  closeChallenge();
+  const size  = parseInt(document.getElementById('ch-size').value);
+  const time  = document.getElementById('ch-time').value;
+  const color = document.getElementById('ch-color').value;
+  const komi  = document.getElementById('ch-komi').value;
+
+  const timeControls = {
+    blitz:          { system:'byoyomi', main_time:180,   period_time:10, periods:5 },
+    live:           { system:'byoyomi', main_time:600,   period_time:30, periods:5 },
+    correspondence: { system:'simple',  per_move:259200 },
+  };
+
+  const body = {
+    challenger_color: color,
+    game: {
+      name:          `${OGS.user.username} vs ?`,
+      rules:         'japanese',
+      ranked:        false,
+      width:         size,
+      height:        size,
+      komi_auto:     komi === 'automatic' ? 'automatic' : 'custom',
+      komi:          komi === 'automatic' ? null : parseFloat(komi),
+      disable_analysis: false,
+      time_control:  timeControls[time],
+    }
+  };
+
+  try {
+    sysChat('Açık meydan okuma oluşturuluyor…');
+    const resp = await ogsPost('/challenges', body);
+    if (resp.game) {
+      sysChat(`Maç oluşturuldu! Rakip bekleniyor… (ID: ${resp.game})`);
+      OGS.socket.emit('game/wait', { game_id: resp.game });
+      document.getElementById('game-info-bar').textContent = `Maç ID: ${resp.game} — Rakip bekleniyor…`;
+    }
+  } catch(e) {
+    sysChat(`⚠️ Meydan okuma oluşturulamadı: ${e.message}`);
+  }
+}
+
+/* ── CHAT ── */
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !OGS.gameId) return;
+
+  OGS.socket.emit('game/chat', {
+    auth:        OGS.gameChatAuth,
+    game_id:     OGS.gameId,
+    player_id:   OGS.user.id,
+    body:        msg,
+    type:        'discussion',
+    move_number: OGS.game?.moves?.length || 0,
+    username:    OGS.user.username,
+    is_player:   true,
+    ranking:     OGS.user.ranking || 0,
+    ui_class:    '',
+  });
+  addChat(OGS.user.username, msg);
+  input.value = '';
+}
+
+function addChat(user, text) {
+  const el = document.getElementById('chat-log');
+  const d  = document.createElement('div');
+  d.className = 'chat-msg';
+  d.innerHTML = `<span class="cm-user">${esc(user)}:</span> <span class="cm-text">${esc(text)}</span>`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function sysChat(text) {
+  const el = document.getElementById('chat-log');
+  const d  = document.createElement('div');
+  d.className = 'chat-msg';
+  d.innerHTML = `<span class="cm-sys">${esc(text)}</span>`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ── PHASE OVERLAY ── */
+function showPhase(phase, game) {
+  const ov = document.getElementById('phase-overlay');
+  const ti = document.getElementById('phase-title');
+  const su = document.getElementById('phase-sub');
+  const pb = document.getElementById('phase-btn');
+
+  if (phase === 'stone removal') {
+    ti.textContent = 'Taş Kaldırma Aşaması';
+    su.textContent = 'Ölü taşları işaretleyin ve kabul edin.';
+    pb.style.display = 'block';
+    pb.textContent = 'Kabul Et';
+    ov.classList.add('show');
+  } else if (phase === 'finished') {
+    const winner = game?.winner;
+    const score  = game?.outcome;
+    ti.textContent = `Oyun Bitti`;
+    su.textContent = score ? `Sonuç: ${score}` : 'Oyun tamamlandı.';
+    pb.style.display = 'block';
+    pb.textContent = 'Yeni Maç';
+    ov.classList.add('show');
+    sysChat(`Oyun bitti. ${score||''}`);
+  } else {
+    ov.classList.remove('show');
+  }
+}
+
+function phaseAction() {
+  const phase = OGS.game?.phase;
+  if (phase === 'stone removal') {
+    OGS.socket.emit('game/removed_stones/accept', {
+      auth:            OGS.gameAuth,
+      game_id:         OGS.gameId,
+      player_id:       OGS.user.id,
+      stones:          '',
+      strict_seki_mode:false,
+    });
+    document.getElementById('phase-overlay').classList.remove('show');
+  } else if (phase === 'finished') {
+    disconnectCurrentGame();
+    document.getElementById('phase-overlay').classList.remove('show');
+    document.getElementById('game-btns').style.display='none';
+    document.getElementById('lobby-btns').style.display='block';
+  }
+}
+
+/* ── SAAT ── */
+function renderClock(data) {
+  if (!data) return;
+  const isBlackTurn = data.current_player === OGS.game?.players?.black?.id;
+
+  document.getElementById('clock-black').classList.toggle('active', isBlackTurn);
+  document.getElementById('clock-white').classList.toggle('active', !isBlackTurn);
+
+  const fmt = (secs) => {
+    if (secs === undefined || secs === null) return '—';
+    const s = Math.max(0, Math.floor(secs));
+    const m = Math.floor(s/60), sec = s%60;
+    return `${m}:${String(sec).padStart(2,'0')}`;
+  };
+
+  const bc = data.black_time || {};
+  const wc = data.white_time || {};
+
+  document.getElementById('clock-b-time').textContent = fmt(bc.thinking_time ?? bc.main_time);
+  document.getElementById('clock-w-time').textContent = fmt(wc.thinking_time ?? wc.main_time);
+  document.getElementById('clock-b-per').textContent  = bc.periods ? `${bc.periods} dönem` : '';
+  document.getElementById('clock-w-per').textContent  = wc.periods ? `${wc.periods} dönem` : '';
+
+  // Kırmızı uyarı
+  const myTime = OGS.myColor==='black' ? bc : wc;
+  const myMain = myTime.thinking_time ?? myTime.main_time ?? 999;
+  document.getElementById(`clock-${OGS.myColor}`).classList.toggle('danger', myMain < 30);
+}
+
+/* ── UI GÜNCELLEMELERİ ── */
+function updateGameUI(game, moveCount) {
+  const myTurn = OGS.myColor && game.phase==='play' &&
+    ((moveCount%2===0 && OGS.myColor==='black') ||
+     (moveCount%2===1 && OGS.myColor==='white'));
+
+  const turn = moveCount%2===0 ? 'black' : 'white';
+  document.getElementById('turn-stone').className = 'turn-stone '+turn;
+  document.getElementById('turn-text').textContent =
+    (turn==='black'?'Siyah':'Beyaz')+"'ın sırası" + (OGS.myColor ? (myTurn?' (Sen)':' (Rakip)') : '');
+  document.getElementById('your-turn-badge').classList.toggle('show', !!myTurn);
+  document.getElementById('move-num').textContent = moveCount;
+}
+
+function renderMoveList() {
+  const el = document.getElementById('move-list');
+  el.innerHTML='';
+  moveHistory.forEach((h,i)=>{
+    const d=document.createElement('div');
+    d.className='me'+(i===moveHistory.length-1?' cur':'');
+    d.innerHTML=`<span class="mn">${i+1}.</span><span class="mp ${h.color==='black'?'b':'w'}"></span><span>${h.coord}</span>`;
+    el.appendChild(d);
+  });
+  el.scrollTop=el.scrollHeight;
+}
+
+function rankLabel(r) {
+  if (r===undefined||r===null) return '—';
+  if (r < 30) return `${30-r}k`;
+  return `${r-30+1}d`;
+}
+
+function setConnStatus(state, label) {
+  document.getElementById('cdot').className   = `cdot ${state}`;
+  document.getElementById('clabel').textContent = label;
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display='block';
+}
+
+/* ── PROFİL UI ── */
+function renderProfile(user) {
+  document.getElementById('profile-area').style.display='block';
+  document.getElementById('my-name').textContent = user.username;
+  document.getElementById('my-rank').textContent = rankLabel(user.ranking);
+
+  const av = document.getElementById('my-avatar');
+  if (user.icon_url) {
+    av.innerHTML=`<img src="${user.icon_url}" alt="avatar" />`;
+  } else {
+    av.textContent = user.username[0].toUpperCase();
+  }
+
+  document.getElementById('new-game-btn').disabled = false;
+  document.getElementById('logout-btn').style.display='inline-block';
+}
+
+/* ── AUTH ── */
+function logout() {
+  sessionStorage.removeItem('ogs_token');
+  sessionStorage.removeItem('ogs_client_id');
+  if (OGS.socket) OGS.socket.disconnect();
+  if (pingInterval) clearInterval(pingInterval);
+  window.location.reload();
+}
+
+/* ═══════════════════════════════════════════════════
+   BAŞLAT
+═══════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', async () => {
+  // 1) OAuth callback kontrolü (URL'de #access_token var mı?)
+  const fromOAuth = handleOAuthCallback();
+
+  // 2) Kayıtlı token var mı?
+  const hasToken = fromOAuth || checkStoredToken();
+
+  if (!hasToken) {
+    // Login ekranını göster
+    document.getElementById('login-screen').classList.remove('hidden');
+    return;
+  }
+
+  // 3) Token var, giriş yap
+  document.getElementById('login-screen').classList.add('hidden');
+  setConnStatus('connecting','Kullanıcı bilgileri alınıyor…');
+
+  try {
+    await fetchUserConfig();
+    renderProfile(OGS.user);
+    sysChat(`Hoş geldin, ${OGS.user.username}!`);
+    connectSocket();
+  } catch(e) {
+    console.error('Giriş hatası:', e);
+    // Token süresi dolmuş olabilir
+    sessionStorage.removeItem('ogs_token');
+    document.getElementById('login-screen').classList.remove('hidden');
+    showLoginError('Oturum süresi doldu, tekrar giriş yapın.');
+  }
+});
+</script>
+</body>
+</html>
