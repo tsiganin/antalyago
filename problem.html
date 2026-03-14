@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Problem – Go Problemleri</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Noto+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="problems.js"></script>
+  <style>
+    :root {
+      --wood:       #d4a84b;
+      --wood-dark:  #b8861a;
+      --wood-light: #f0d080;
+      --wood-board: #dcb468;
+      --ink:        #1a1008;
+      --paper:      #fdf6e3;
+      --paper-dark: #f0e6c8;
+      --panel:      #faf2dc;
+      --border:     #c9a840;
+      --shadow:     rgba(80,40,0,.18);
+      --green:      #27ae60;
+      --red:        #c0392b;
+      --blue:       #2471a3;
+      --muted:      #9a7840;
+      --r:          3px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      min-height:100vh; background:var(--paper);
+      background-image:
+        radial-gradient(ellipse at 10% 5%,  rgba(212,168,75,.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 95%, rgba(184,134,26,.09) 0%, transparent 50%);
+      font-family:'Noto Sans',sans-serif; color:var(--ink);
+      display:flex; flex-direction:column;
+    }
+
+    /* TOPBAR */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.75rem 1.5rem; background:var(--paper-dark);
+      border-bottom:2px solid var(--border); box-shadow:0 2px 8px var(--shadow);
+      flex-shrink:0; animation:fadeDown .5s ease both;
+    }
+    .topbar-left { display:flex; align-items:center; gap:.75rem; }
+    .back-btn {
+      display:flex; align-items:center; gap:.3rem; text-decoration:none;
+      color:var(--muted); font-size:.8rem; font-weight:600;
+      padding:.28rem .65rem; border:1px solid var(--border); border-radius:var(--r);
+      transition:all .15s;
+    }
+    .back-btn:hover { background:var(--wood); color:var(--ink); }
+    .page-title { font-family:'Noto Serif',serif; font-size:1.12rem; font-weight:700; letter-spacing:.06em; }
+
+    /* MAIN */
+    .main {
+      flex:1; display:grid;
+      grid-template-columns:220px 1fr 220px;
+      gap:1.25rem; max-width:1100px; width:100%;
+      margin:0 auto; padding:1.5rem;
+      animation:fadeUp .5s .1s ease both;
+    }
+
+    /* PANELS */
+    .panel {
+      background:var(--panel); border:1.5px solid var(--border);
+      border-radius:var(--r); box-shadow:3px 3px 0 var(--wood-dark);
+      padding:1rem; display:flex; flex-direction:column; gap:.85rem;
+    }
+    .panel-title {
+      font-family:'Noto Serif',serif; font-size:.8rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.12em; color:var(--wood-dark);
+      padding-bottom:.45rem; border-bottom:1px solid var(--border);
+    }
+
+    /* FILTER BUTTONS */
+    .filter-group { display:flex; flex-direction:column; gap:.35rem; }
+    .filter-label { font-size:.72rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .filter-btns  { display:flex; flex-direction:column; gap:.3rem; }
+    .fbtn {
+      padding:.38rem .6rem; border:1.5px solid var(--border);
+      border-radius:var(--r); background:var(--paper);
+      font-family:'Noto Sans',sans-serif; font-size:.78rem; font-weight:600;
+      cursor:pointer; transition:all .15s; text-align:left; color:var(--ink);
+    }
+    .fbtn:hover  { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .fbtn.active { background:var(--wood); border-color:var(--wood-dark); }
+
+    /* TYPE BADGES */
+    .type-badge {
+      display:inline-block; font-size:.65rem; font-weight:700;
+      letter-spacing:.08em; text-transform:uppercase;
+      padding:.15rem .5rem; border-radius:20px; margin-left:.4rem;
+    }
+    .type-badge.tsumego  { background:#fde8e8; color:#c0392b; border:1px solid #e74c3c; }
+    .type-badge.joseki   { background:#e8f4fd; color:#2471a3; border:1px solid #3498db; }
+    .type-badge.tesuji   { background:#e8fdf0; color:#1e8449; border:1px solid #27ae60; }
+    .type-badge.endgame  { background:#fef9e7; color:#b7770d; border:1px solid #f39c12; }
+
+    .level-badge {
+      display:inline-block; font-size:.62rem; font-weight:700;
+      letter-spacing:.06em; text-transform:uppercase;
+      padding:.12rem .45rem; border-radius:20px;
+    }
+    .level-badge.beginner     { background:#e8f5e9; color:var(--green); border:1px solid var(--green); }
+    .level-badge.intermediate { background:#fff3e0; color:#e67e22; border:1px solid #e67e22; }
+    .level-badge.advanced     { background:#fce4ec; color:var(--red); border:1px solid var(--red); }
+
+    /* PROBLEM LIST */
+    #problem-list { display:flex; flex-direction:column; gap:.35rem; overflow-y:auto; max-height:460px; }
+    .prob-item {
+      padding:.45rem .6rem; border:1px solid var(--border); border-radius:var(--r);
+      background:var(--paper); cursor:pointer; transition:all .12s;
+      display:flex; align-items:center; justify-content:space-between; gap:.4rem;
+    }
+    .prob-item:hover  { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .prob-item.active { background:var(--wood-light); border-color:var(--wood-dark); font-weight:600; }
+    .prob-item.solved { opacity:.6; }
+    .prob-item.solved::after { content:'✓'; color:var(--green); font-weight:700; font-size:.85rem; }
+    .prob-name { font-size:.78rem; flex:1; }
+
+    /* BOARD */
+    .board-col { display:flex; flex-direction:column; align-items:center; gap:.75rem; }
+
+    .problem-header {
+      width:100%; max-width:520px;
+      background:var(--panel); border:1.5px solid var(--border);
+      border-radius:var(--r); padding:.75rem 1rem;
+      display:flex; flex-direction:column; gap:.35rem;
+    }
+    .prob-title-row { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .prob-title { font-family:'Noto Serif',serif; font-size:1.1rem; font-weight:700; }
+    .prob-desc  { font-size:.82rem; color:var(--muted); line-height:1.55; }
+
+    .board-container {
+      position:relative; width:100%; max-width:520px; aspect-ratio:1;
+      background:var(--wood-board); border:3px solid var(--wood-dark); border-radius:var(--r);
+      box-shadow:5px 5px 0 var(--wood-dark),0 8px 28px var(--shadow); overflow:hidden;
+    }
+    #goban { width:100%; height:100%; display:block; cursor:crosshair; }
+
+    /* RESULT OVERLAY */
+    .result-overlay {
+      display:none; position:absolute; inset:0;
+      align-items:center; justify-content:center; flex-direction:column;
+      gap:.75rem; z-index:20; padding:2rem; text-align:center;
+      animation:popIn .3s ease both;
+    }
+    .result-overlay.show { display:flex; }
+    .result-overlay.correct { background:rgba(39,174,96,.12); }
+    .result-overlay.wrong   { background:rgba(192,57,43,.10); }
+
+    .result-icon { font-size:3rem; }
+    .result-text { font-family:'Noto Serif',serif; font-size:1.5rem; font-weight:700; }
+    .result-sub  { font-size:.85rem; color:var(--muted); max-width:240px; line-height:1.6; }
+
+    /* TURN INDICATOR */
+    .turn-bar { display:flex; align-items:center; gap:.6rem; font-size:.85rem; font-weight:600; color:var(--muted); }
+    .turn-stone { width:18px; height:18px; border-radius:50%; flex-shrink:0; }
+    .turn-stone.black { background:radial-gradient(circle at 35% 30%,#555,#111); box-shadow:0 1px 3px rgba(0,0,0,.4); }
+    .turn-stone.white { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+
+    /* ACTION BUTTONS */
+    .action-row { display:flex; gap:.5rem; width:100%; max-width:520px; }
+    .btn {
+      flex:1; padding:.5rem; border:1.5px solid var(--border); border-radius:var(--r);
+      background:var(--paper); font-family:'Noto Sans',sans-serif;
+      font-size:.78rem; font-weight:600; letter-spacing:.05em;
+      cursor:pointer; transition:all .15s; color:var(--ink);
+    }
+    .btn.primary { background:var(--wood); border-color:var(--wood-dark); }
+    .btn.primary:hover { background:var(--wood-dark); color:#fff; }
+    .btn:hover:not(.primary) { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .btn:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* HINT BOX */
+    #hint-box {
+      display:none; width:100%; max-width:520px;
+      background:#fffde7; border:1.5px solid var(--wood);
+      border-radius:var(--r); padding:.6rem .85rem;
+      font-size:.82rem; color:var(--ink); line-height:1.6;
+    }
+    #hint-box.show { display:block; }
+
+    /* RIGHT PANEL */
+    .stat-row {
+      display:flex; justify-content:space-around;
+      background:var(--paper); border:1px solid var(--border); border-radius:var(--r); padding:.55rem;
+    }
+    .stat-item { display:flex; flex-direction:column; align-items:center; gap:.15rem; }
+    .stat-val { font-family:'JetBrains Mono',monospace; font-size:1.2rem; font-weight:600; }
+    .stat-val.green { color:var(--green); }
+    .stat-val.red   { color:var(--red); }
+    .stat-lbl { font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; }
+
+    /* PROGRESS BAR */
+    .progress-wrap { display:flex; flex-direction:column; gap:.3rem; }
+    .progress-track {
+      width:100%; height:8px; background:var(--paper-dark);
+      border:1px solid var(--border); border-radius:4px; overflow:hidden;
+    }
+    .progress-fill {
+      height:100%; background:linear-gradient(90deg,var(--green),#2ecc71);
+      border-radius:4px; transition:width .4s ease;
+    }
+    .progress-label { font-size:.72rem; color:var(--muted); text-align:right; }
+
+    /* SOLUTION MOVES */
+    #solution-area {
+      display:none; background:var(--paper); border:1px solid var(--border);
+      border-radius:var(--r); padding:.6rem .75rem; font-size:.78rem; line-height:1.7;
+    }
+    #solution-area.show { display:block; }
+    #solution-area .sol-title { font-weight:700; color:var(--wood-dark); margin-bottom:.25rem; }
+
+    /* MOVE MARKER on board */
+    .move-marker {
+      position:absolute; border-radius:50%;
+      background:rgba(39,174,96,.7); border:2px solid var(--green);
+      pointer-events:none; animation:popIn .25s ease;
+      transform:translate(-50%,-50%);
+    }
+
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn    { from{opacity:0;transform:scale(.6)} to{opacity:1;transform:scale(1)} }
+
+    #problem-list::-webkit-scrollbar { width:4px; }
+    #problem-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+    @media(max-width:900px) { .main{grid-template-columns:1fr} .board-container{max-width:480px} }
+    @media(max-width:540px) { .topbar{padding:.6rem 1rem} .main{padding:1rem .75rem} }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="index.html">← Ana Sayfa</a>
+    <span class="page-title">Go Problemleri</span>
+  </div>
+  <div style="font-size:.78rem;color:var(--muted);font-weight:600;">
+    <span id="total-count">0</span> problem
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- SOL: FİLTRE + LİSTE -->
+  <div class="panel">
+    <div class="panel-title">Filtrele</div>
+
+    <!-- Tür -->
+    <div class="filter-group">
+      <div class="filter-label">Tür</div>
+      <div class="filter-btns">
+        <button class="fbtn active" onclick="setFilter('type','all')"   id="ft-all">Tümü</button>
+        <button class="fbtn"        onclick="setFilter('type','tsumego')" id="ft-tsumego">
+          Tsumego <span class="type-badge tsumego">Yakalama</span>
+        </button>
+        <button class="fbtn"        onclick="setFilter('type','joseki')"  id="ft-joseki">
+          Joseki <span class="type-badge joseki">Açılış</span>
+        </button>
+        <button class="fbtn"        onclick="setFilter('type','tesuji')"  id="ft-tesuji">
+          Tesuji <span class="type-badge tesuji">Taktik</span>
+        </button>
+        <button class="fbtn"        onclick="setFilter('type','endgame')" id="ft-endgame">
+          Endgame <span class="type-badge endgame">Bitirme</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Seviye -->
+    <div class="filter-group">
+      <div class="filter-label">Seviye</div>
+      <div class="filter-btns">
+        <button class="fbtn active" onclick="setFilter('level','all')"          id="fl-all">Tümü</button>
+        <button class="fbtn"        onclick="setFilter('level','beginner')"      id="fl-beginner">
+          <span class="level-badge beginner">Başlangıç</span>
+        </button>
+        <button class="fbtn"        onclick="setFilter('level','intermediate')"  id="fl-inter">
+          <span class="level-badge intermediate">Orta</span>
+        </button>
+        <button class="fbtn"        onclick="setFilter('level','advanced')"      id="fl-advanced">
+          <span class="level-badge advanced">İleri</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Problem listesi -->
+    <div class="panel-title" style="margin-top:.25rem">Problemler</div>
+    <div id="problem-list"></div>
+
+    <button class="btn primary" onclick="loadRandom()" style="margin-top:auto">🎲 Rastgele</button>
+  </div>
+
+  <!-- ORTA: TAHTA -->
+  <div class="board-col">
+
+    <div class="problem-header" id="prob-header">
+      <div class="prob-title-row">
+        <span class="prob-title" id="prob-title">Problem Seç</span>
+        <span class="type-badge" id="prob-type-badge"></span>
+        <span class="level-badge" id="prob-level-badge"></span>
+      </div>
+      <div class="prob-desc" id="prob-desc">Soldan bir problem seçin veya rastgele yükleyin.</div>
+    </div>
+
+    <div class="turn-bar">
+      <div class="turn-stone black" id="turn-stone"></div>
+      <span id="turn-text">Siyah oynar</span>
+    </div>
+
+    <div class="board-container">
+      <canvas id="goban"></canvas>
+
+      <!-- Doğru overlay -->
+      <div class="result-overlay correct" id="overlay-correct">
+        <div class="result-icon">✓</div>
+        <div class="result-text">Doğru!</div>
+        <div class="result-sub" id="correct-sub">Mükemmel hamle.</div>
+        <button class="btn primary" onclick="nextProblem()" style="width:140px;margin-top:.5rem">Sonraki →</button>
+      </div>
+
+      <!-- Yanlış overlay -->
+      <div class="result-overlay wrong" id="overlay-wrong">
+        <div class="result-icon">✗</div>
+        <div class="result-text">Yanlış</div>
+        <div class="result-sub">Tekrar dene veya ipucu al.</div>
+        <button class="btn" onclick="resetProblem()" style="width:140px;margin-top:.5rem">↺ Tekrar</button>
+      </div>
+    </div>
+
+    <div id="hint-box">💡 <span id="hint-text"></span></div>
+
+    <div class="action-row">
+      <button class="btn" onclick="showHint()"    id="btn-hint">💡 İpucu</button>
+      <button class="btn" onclick="showSolution()" id="btn-sol">👁 Çözüm</button>
+      <button class="btn" onclick="resetProblem()" id="btn-reset">↺ Sıfırla</button>
+      <button class="btn primary" onclick="nextProblem()" id="btn-next">→ Sonraki</button>
+    </div>
+
+    <!-- Çözüm -->
+    <div id="solution-area">
+      <div class="sol-title">Çözüm:</div>
+      <div id="solution-text"></div>
+    </div>
+  </div>
+
+  <!-- SAĞ: İSTATİSTİK -->
+  <div class="panel">
+    <div class="panel-title">İstatistik</div>
+
+    <div class="stat-row">
+      <div class="stat-item">
+        <div class="stat-val green" id="stat-correct">0</div>
+        <div class="stat-lbl">Doğru</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val red" id="stat-wrong">0</div>
+        <div class="stat-lbl">Yanlış</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-total">0</div>
+        <div class="stat-lbl">Toplam</div>
+      </div>
+    </div>
+
+    <!-- İlerleme -->
+    <div class="progress-wrap">
+      <div class="filter-label">Başarı Oranı</div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-label" id="progress-label">—</div>
+    </div>
+
+    <!-- Tür bazında ilerleme -->
+    <div>
+      <div class="filter-label" style="margin-bottom:.4rem">Tür İlerlemesi</div>
+      <div style="display:flex;flex-direction:column;gap:.4rem;">
+        <div class="type-progress" data-type="tsumego"></div>
+        <div class="type-progress" data-type="joseki"></div>
+        <div class="type-progress" data-type="tesuji"></div>
+        <div class="type-progress" data-type="endgame"></div>
+      </div>
+    </div>
+
+    <!-- Çözülen problemler -->
+    <div>
+      <div class="filter-label" style="margin-bottom:.35rem">Çözülenler</div>
+      <div id="solved-list" style="font-size:.73rem;color:var(--muted);line-height:1.8;">—</div>
+    </div>
+
+    <button class="btn" onclick="resetStats()" style="margin-top:auto;font-size:.72rem;color:var(--red);border-color:var(--red)">
+      İstatistikleri Sıfırla
+    </button>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+const LTRS = 'ABCDEFGHJKLMNOPQRST';
+const inB  = (x,y,s) => x>=0&&y>=0&&x<s&&y<s;
+
+let currentProblem = null;
+let boardGrid      = [];
+let boardSize      = 9;
+let solved         = new Set(JSON.parse(localStorage.getItem('go_solved')||'[]'));
+let stats = JSON.parse(localStorage.getItem('go_stats')||'{"correct":0,"wrong":0,"total":0}');
+let filter = { type:'all', level:'all' };
+let hintShown = false;
+let resultShown = false;
+let wrongAttempts = 0;
+
+/* ═══════════════════════════════════════
+   PROBLEM YÜKLEMEsİ
+═══════════════════════════════════════ */
+function loadProblem(p) {
+  currentProblem = p;
+  boardSize = p.size || 9;
+  hintShown = false;
+  resultShown = false;
+  wrongAttempts = 0;
+
+  // Header
+  document.getElementById('prob-title').textContent = p.title;
+  document.getElementById('prob-desc').textContent  = p.desc;
+
+  const tb = document.getElementById('prob-type-badge');
+  tb.textContent  = typeLabel(p.type);
+  tb.className    = `type-badge ${p.type}`;
+
+  const lb = document.getElementById('prob-level-badge');
+  lb.textContent  = levelLabel(p.level);
+  lb.className    = `level-badge ${p.level}`;
+
+  // Sıra
+  const ts = document.getElementById('turn-stone');
+  ts.className = 'turn-stone ' + p.turn;
+  document.getElementById('turn-text').textContent =
+    (p.turn==='black'?'Siyah':'Beyaz') + ' oynar';
+
+  // Overlay kapat
+  document.getElementById('overlay-correct').classList.remove('show');
+  document.getElementById('overlay-wrong').classList.remove('show');
+  document.getElementById('hint-box').classList.remove('show');
+  document.getElementById('solution-area').classList.remove('show');
+
+  // Tahta
+  initBoard(p);
+
+  // Problem listesinde aktif
+  document.querySelectorAll('.prob-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === p.id);
+  });
+}
+
+function initBoard(p) {
+  const cv = document.getElementById('goban');
+  const wrap = cv.parentElement;
+  boardGrid = Array.from({length:p.size},()=>Array(p.size).fill(null));
+
+  // Taşları yerleştir
+  (p.board||[]).forEach(stone => {
+    const [color, coord] = stone.split(':');
+    const [x, y] = coord.split(',').map(Number);
+    if (inB(x,y,p.size)) boardGrid[y][x] = color==='B'?'black':'white';
+  });
+
+  const fit = () => {
+    const r = wrap.getBoundingClientRect();
+    cv.width  = r.width  || 520;
+    cv.height = r.height || 520;
+    drawBoard();
+  };
+  setTimeout(fit,30);
+  window.addEventListener('resize', fit);
+
+  cv.onclick = e => {
+    if (resultShown) return;
+    const rect = cv.getBoundingClientRect();
+    const sx = cv.width/rect.width, sy = cv.height/rect.height;
+    const cx = (e.clientX-rect.left)*sx, cy = (e.clientY-rect.top)*sy;
+    const {m,st} = met(cv.width, p.size);
+    const xi = Math.round((cx-m)/st);
+    const yi = Math.round((cy-m)/st);
+    if (!inB(xi,yi,p.size)||boardGrid[yi][xi]) return;
+    checkMove(xi, yi);
+  };
+}
+
+function met(s, size) {
+  const m=s*.065, st=(s-m*2)/(size-1);
+  return {m,st};
+}
+
+/* ═══════════════════════════════════════
+   HAMLE KONTROLÜ
+═══════════════════════════════════════ */
+function checkMove(x, y) {
+  const p = currentProblem;
+  const coord = `${x},${y}`;
+  const isCorrect = p.solution.some(sol => {
+    if (Array.isArray(sol)) return sol.includes(coord);
+    return sol === coord;
+  });
+
+  // Taşı geçici olarak göster
+  boardGrid[y][x] = p.turn;
+  drawBoard();
+
+  if (isCorrect) {
+    onCorrect(x, y);
+  } else {
+    wrongAttempts++;
+    onWrong(x, y);
+    // Yanlış taşı kaldır
+    setTimeout(() => {
+      boardGrid[y][x] = null;
+      drawBoard();
+    }, 600);
+  }
+}
+
+function onCorrect(x, y) {
+  resultShown = true;
+  solved.add(currentProblem.id);
+  localStorage.setItem('go_solved', JSON.stringify([...solved]));
+
+  stats.correct++;
+  stats.total++;
+  saveStats();
+
+  document.getElementById('correct-sub').textContent =
+    hintShown ? 'İpucu kullandın ama bulundu!' : 'Harika!';
+  document.getElementById('overlay-correct').classList.add('show');
+  updateStats();
+  renderProblemList();
+}
+
+function onWrong(x, y) {
+  stats.wrong++;
+  stats.total++;
+  saveStats();
+  updateStats();
+
+  document.getElementById('overlay-wrong').classList.add('show');
+  setTimeout(()=>{
+    document.getElementById('overlay-wrong').classList.remove('show');
+  }, 1200);
+}
+
+/* ═══════════════════════════════════════
+   CANVAS ÇIZIM
+═══════════════════════════════════════ */
+function drawBoard() {
+  const cv  = document.getElementById('goban');
+  const ctx = cv.getContext('2d');
+  const s   = cv.width;
+  const sz  = boardSize;
+  const {m,st} = met(s, sz);
+
+  ctx.fillStyle='#dcb468'; ctx.fillRect(0,0,s,s);
+  const g=ctx.createLinearGradient(0,0,s,s);
+  g.addColorStop(0,'rgba(255,220,120,.18)'); g.addColorStop(1,'rgba(140,80,0,.10)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,s,s);
+
+  ctx.strokeStyle='#7a5010'; ctx.lineWidth=1;
+  for(let i=0;i<sz;i++){
+    const px=m+i*st, py=m+i*st;
+    ctx.beginPath();ctx.moveTo(px,m);ctx.lineTo(px,m+(sz-1)*st);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(m,py);ctx.lineTo(m+(sz-1)*st,py);ctx.stroke();
+  }
+  ctx.fillStyle='#7a5010';
+  for(const[sx2,sy2] of stars(sz)){
+    ctx.beginPath();ctx.arc(m+sx2*st,m+sy2*st,st*.1,0,Math.PI*2);ctx.fill();
+  }
+
+  // Koordinatlar
+  ctx.font=`${Math.max(9,st*.3)}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='#7a5010'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<sz;i++){
+    const px=m+i*st;
+    ctx.fillText(LTRS[i],px,m*.4); ctx.fillText(LTRS[i],px,s-m*.4);
+    ctx.fillText(String(sz-i),m*.4,m+i*st); ctx.fillText(String(sz-i),s-m*.4,m+i*st);
+  }
+
+  // Taşlar
+  for(let y=0;y<sz;y++)
+    for(let x=0;x<sz;x++)
+      if(boardGrid[y][x]) drawStone(ctx,m+x*st,m+y*st,st*.46,boardGrid[y][x]);
+
+  // Çözüm gösteriliyorsa işaretle
+  if(document.getElementById('solution-area').classList.contains('show') && currentProblem){
+    ctx.strokeStyle=var_green(); ctx.lineWidth=2;
+    currentProblem.solution.forEach(sol=>{
+      const coords = Array.isArray(sol) ? sol : [sol];
+      coords.forEach(coord=>{
+        const [x,y]=coord.split(',').map(Number);
+        if(inB(x,y,sz)){
+          ctx.beginPath();
+          ctx.arc(m+x*st,m+y*st,st*.3,0,Math.PI*2);
+          ctx.stroke();
+        }
+      });
+    });
+  }
+}
+
+function var_green(){ return '#27ae60'; }
+
+function drawStone(ctx,cx,cy,r,col){
+  ctx.save();
+  if(col==='black'){
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#555');g.addColorStop(1,'#111');ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=4;ctx.shadowOffsetX=2;ctx.shadowOffsetY=2;
+  }else{
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#fff');g.addColorStop(1,'#ccc');ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.3)';ctx.shadowBlur=3;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;
+  }
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  if(col==='white'){ctx.strokeStyle='#aaa';ctx.lineWidth=.5;ctx.stroke();}
+  ctx.restore();
+}
+
+function stars(sz){
+  if(sz===19)return[[3,3],[9,3],[15,3],[3,9],[9,9],[15,9],[3,15],[9,15],[15,15]];
+  if(sz===13)return[[3,3],[9,3],[3,9],[9,9],[6,6]];
+  return[[2,2],[6,2],[4,4],[2,6],[6,6]];
+}
+
+/* ═══════════════════════════════════════
+   FİLTRELEME & LİSTE
+═══════════════════════════════════════ */
+function setFilter(key, val) {
+  filter[key] = val;
+
+  // Buton aktifliği
+  if(key==='type'){
+    document.querySelectorAll('[id^="ft-"]').forEach(b=>b.classList.remove('active'));
+    document.getElementById(`ft-${val}`).classList.add('active');
+  } else {
+    document.querySelectorAll('[id^="fl-"]').forEach(b=>b.classList.remove('active'));
+    document.getElementById(`fl-${val==='all'?'all':val==='beginner'?'beginner':val==='intermediate'?'inter':'advanced'}`).classList.add('active');
+  }
+  renderProblemList();
+}
+
+function filteredProblems() {
+  return PROBLEMS.filter(p => {
+    const typeOk  = filter.type  === 'all' || p.type  === filter.type;
+    const levelOk = filter.level === 'all' || p.level === filter.level;
+    return typeOk && levelOk;
+  });
+}
+
+function renderProblemList() {
+  const list = document.getElementById('problem-list');
+  const probs = filteredProblems();
+  document.getElementById('total-count').textContent = PROBLEMS.length;
+  list.innerHTML = '';
+
+  probs.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'prob-item' +
+      (currentProblem?.id===p.id ? ' active' : '') +
+      (solved.has(p.id) ? ' solved' : '');
+    el.dataset.id = p.id;
+    el.innerHTML = `
+      <span class="prob-name">${p.title}</span>
+      <span class="type-badge ${p.type}" style="font-size:.58rem">${typeLabel(p.type)}</span>
+      <span class="level-badge ${p.level}" style="font-size:.58rem">${levelLabel(p.level)}</span>
+    `;
+    el.onclick = () => loadProblem(p);
+    list.appendChild(el);
+  });
+
+  if (!probs.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:.5rem">Problem bulunamadı.</div>';
+  }
+}
+
+/* ═══════════════════════════════════════
+   AKSİYONLAR
+═══════════════════════════════════════ */
+function showHint() {
+  if (!currentProblem) return;
+  hintShown = true;
+  document.getElementById('hint-text').textContent = currentProblem.hint || 'Doğru hamleyi dikkatlice düşün.';
+  document.getElementById('hint-box').classList.add('show');
+}
+
+function showSolution() {
+  if (!currentProblem) return;
+  const coords = currentProblem.solution.flat().map(c => {
+    const [x,y] = c.split(',').map(Number);
+    return `${LTRS[x]}${boardSize-y}`;
+  });
+  document.getElementById('solution-text').textContent =
+    `Doğru hamle(ler): ${coords.join(', ')}`;
+  document.getElementById('solution-area').classList.add('show');
+  drawBoard(); // işaretleri göster
+}
+
+function resetProblem() {
+  if (!currentProblem) return;
+  loadProblem(currentProblem);
+}
+
+function nextProblem() {
+  const probs = filteredProblems();
+  if (!probs.length) return;
+  const idx = probs.findIndex(p => p.id === currentProblem?.id);
+  const next = probs[(idx+1) % probs.length];
+  loadProblem(next);
+}
+
+function loadRandom() {
+  const probs = filteredProblems();
+  if (!probs.length) return;
+  const p = probs[Math.floor(Math.random()*probs.length)];
+  loadProblem(p);
+}
+
+/* ═══════════════════════════════════════
+   İSTATİSTİK
+═══════════════════════════════════════ */
+function saveStats() {
+  localStorage.setItem('go_stats', JSON.stringify(stats));
+}
+
+function updateStats() {
+  document.getElementById('stat-correct').textContent = stats.correct;
+  document.getElementById('stat-wrong').textContent   = stats.wrong;
+  document.getElementById('stat-total').textContent   = stats.total;
+
+  const rate = stats.total > 0 ? Math.round(stats.correct/stats.total*100) : 0;
+  document.getElementById('progress-fill').style.width  = rate+'%';
+  document.getElementById('progress-label').textContent = stats.total > 0 ? `${rate}% başarı` : '—';
+
+  // Tür bazında
+  document.querySelectorAll('.type-progress').forEach(el => {
+    const type = el.dataset.type;
+    const total  = PROBLEMS.filter(p=>p.type===type).length;
+    const done   = PROBLEMS.filter(p=>p.type===type&&solved.has(p.id)).length;
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);margin-bottom:.2rem">
+        <span>${typeLabel(type)}</span>
+        <span>${done}/${total}</span>
+      </div>
+      <div style="height:4px;background:var(--paper-dark);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${total?Math.round(done/total*100):0}%;background:var(--green);border-radius:2px;transition:width .3s"></div>
+      </div>
+    `;
+  });
+
+  // Çözülenler
+  const solvedNames = [...solved].map(id => {
+    const p = PROBLEMS.find(p=>p.id===id);
+    return p ? p.title : id;
+  });
+  document.getElementById('solved-list').textContent =
+    solvedNames.length ? solvedNames.join(', ') : '—';
+}
+
+function resetStats() {
+  if (!confirm('İstatistikler sıfırlansın mı?')) return;
+  stats = {correct:0, wrong:0, total:0};
+  solved = new Set();
+  saveStats();
+  localStorage.removeItem('go_solved');
+  updateStats();
+  renderProblemList();
+}
+
+/* ═══════════════════════════════════════
+   YARDIMCILAR
+═══════════════════════════════════════ */
+function typeLabel(t) {
+  return { tsumego:'Tsumego', joseki:'Joseki', tesuji:'Tesuji', endgame:'Endgame' }[t] || t;
+}
+function levelLabel(l) {
+  return { beginner:'Başlangıç', intermediate:'Orta', advanced:'İleri' }[l] || l;
+}
+
+/* ═══════════════════════════════════════
+   BAŞLAT
+═══════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  renderProblemList();
+  updateStats();
+  // İlk problemi yükle
+  loadProblem(PROBLEMS[0]);
+});
+</script>
+</body>
+</html>
