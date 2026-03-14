@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Etüd – KataNet Antrenman</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Noto+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <!--
+  ╔═══════════════════════════════════════════════════════════╗
+  ║  KataNet AI Motoru — TensorFlow.js                        ║
+  ║  Kaynak: github.com/maksimKorzh/kata-model-js             ║
+  ║                                                           ║
+  ║  KURULUM:                                                 ║
+  ║  1. kata-model-js repo'sunu klonla                        ║
+  ║  2. "js/" klasörünü → repo/katago/js/ olarak kopyala     ║
+  ║  3. "model/" klasörünü → repo/katago/model/ olarak kopyala║
+  ║                                                           ║
+  ║  REPO YAPISI:                                             ║
+  ║  your-repo/                                               ║
+  ║  ├── index.html                                           ║
+  ║  ├── etud.html          ← bu dosya                       ║
+  ║  ├── canli.html                                           ║
+  ║  └── katago/                                              ║
+  ║      ├── js/                                              ║
+  ║      │   ├── kata.js    ← kata-model-js/js/kata.js        ║
+  ║      │   └── board.js   ← kata-model-js/js/board.js       ║
+  ║      └── model/                                           ║
+  ║          └── b10c128-s1141046784-d204142634/              ║
+  ║              ├── model.json                               ║
+  ║              └── group1-shard*.bin  (~30MB toplam)        ║
+  ╚═══════════════════════════════════════════════════════════╝
+  -->
+
+  <!-- TensorFlow.js (WebGL > WASM > CPU otomatik seçer) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+
+  <style>
+    :root {
+      --wood:       #d4a84b;
+      --wood-dark:  #b8861a;
+      --wood-light: #f0d080;
+      --wood-board: #dcb468;
+      --ink:        #1a1008;
+      --paper:      #fdf6e3;
+      --paper-dark: #f0e6c8;
+      --panel-bg:   #faf2dc;
+      --border:     #c9a840;
+      --shadow:     rgba(80,40,0,.18);
+      --green:      #27ae60;
+      --red:        #c0392b;
+      --blue:       #2980b9;
+      --muted:      #9a7840;
+      --r:          3px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      min-height:100vh; background:var(--paper);
+      background-image:
+        radial-gradient(ellipse at 15% 5%,  rgba(212,168,75,.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 95%, rgba(184,134,26,.09) 0%, transparent 50%);
+      font-family:'Noto Sans',sans-serif; color:var(--ink);
+      display:flex; flex-direction:column;
+    }
+
+    /* TOPBAR */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.75rem 1.5rem; background:var(--paper-dark);
+      border-bottom:2px solid var(--border); box-shadow:0 2px 8px var(--shadow);
+      flex-shrink:0; animation:fadeDown .5s ease both;
+    }
+    .topbar-left { display:flex; align-items:center; gap:.75rem; }
+    .back-btn {
+      display:flex; align-items:center; gap:.35rem;
+      text-decoration:none; color:var(--muted);
+      font-size:.82rem; font-weight:600; letter-spacing:.05em;
+      padding:.3rem .7rem; border:1px solid var(--border); border-radius:var(--r);
+      transition:all .15s;
+    }
+    .back-btn:hover { background:var(--wood); color:var(--ink); }
+    .page-title { font-family:'Noto Serif',serif; font-size:1.15rem; font-weight:700; letter-spacing:.06em; }
+    .engine-badge {
+      font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+      padding:.2rem .6rem; border:1.5px solid var(--border); border-radius:20px;
+      background:var(--wood-light); color:var(--wood-dark);
+    }
+    .katago-status { display:flex; align-items:center; gap:.5rem; font-size:.78rem; color:var(--muted); font-weight:600; }
+    .status-dot { width:9px; height:9px; border-radius:50%; background:#ccc; transition:background .3s; }
+    .status-dot.loading { background:var(--wood); animation:blink 1s infinite; }
+    .status-dot.ready   { background:var(--green); }
+    .status-dot.error   { background:var(--red); }
+    .status-dot.sim     { background:var(--blue); }
+
+    /* MAIN */
+    .main {
+      flex:1; display:grid; grid-template-columns:240px 1fr 240px;
+      gap:1.25rem; max-width:1200px; width:100%;
+      margin:0 auto; padding:1.5rem;
+      animation:fadeUp .5s .1s ease both;
+    }
+
+    /* PANELS */
+    .panel {
+      background:var(--panel-bg); border:1.5px solid var(--border);
+      border-radius:var(--r); box-shadow:3px 3px 0 var(--wood-dark);
+      padding:1rem; display:flex; flex-direction:column; gap:1rem;
+    }
+    .panel-title {
+      font-family:'Noto Serif',serif; font-size:.82rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.12em; color:var(--wood-dark);
+      padding-bottom:.5rem; border-bottom:1px solid var(--border);
+    }
+
+    /* FORMS */
+    .setting-group { display:flex; flex-direction:column; gap:.35rem; }
+    .setting-label { font-size:.75rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .select-wrap { position:relative; }
+    .select-wrap::after { content:'▾'; position:absolute; right:.6rem; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; font-size:.75rem; }
+    select {
+      width:100%; background:var(--paper); border:1.5px solid var(--border);
+      border-radius:var(--r); color:var(--ink); font-family:'Noto Sans',sans-serif;
+      font-size:.85rem; padding:.4rem .6rem; cursor:pointer; outline:none;
+      appearance:none; -webkit-appearance:none; transition:border-color .15s;
+    }
+    select:focus { border-color:var(--wood-dark); }
+    input[type=range] { width:100%; height:6px; cursor:pointer; accent-color:var(--wood-dark); }
+    .range-labels { display:flex; justify-content:space-between; font-size:.7rem; color:var(--muted); margin-top:.1rem; }
+
+    /* COLOR PICKER */
+    .color-picker { display:flex; gap:.5rem; }
+    .color-btn {
+      flex:1; padding:.5rem; border:2px solid var(--border); border-radius:var(--r);
+      background:var(--paper); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:.35rem;
+      font-size:.78rem; font-weight:600; transition:all .15s;
+    }
+    .stone-sm { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+    .color-btn.black .stone-sm { background:radial-gradient(circle at 35% 30%,#555,#111); box-shadow:0 1px 3px rgba(0,0,0,.4); }
+    .color-btn.white .stone-sm { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .color-btn.active { border-color:var(--wood-dark); background:var(--wood-light); }
+    .color-btn:hover:not(.active) { background:var(--paper-dark); }
+
+    /* BUTTONS */
+    .action-btn {
+      width:100%; padding:.55rem; border:1.5px solid var(--border); border-radius:var(--r);
+      background:var(--paper); font-family:'Noto Sans',sans-serif; font-size:.82rem;
+      font-weight:600; letter-spacing:.06em; cursor:pointer; transition:all .15s; color:var(--ink);
+    }
+    .action-btn.primary { background:var(--wood); border-color:var(--wood-dark); }
+    .action-btn.primary:hover { background:var(--wood-dark); color:#fff; }
+    .action-btn:hover:not(.primary) { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .action-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-row { display:flex; gap:.5rem; }
+    .btn-row .action-btn { font-size:.75rem; }
+
+    /* BOARD */
+    .board-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.75rem; }
+    .board-container {
+      position:relative; width:100%; max-width:580px; aspect-ratio:1;
+      background:var(--wood-board); border:3px solid var(--wood-dark); border-radius:var(--r);
+      box-shadow:5px 5px 0 var(--wood-dark),0 10px 30px var(--shadow); overflow:hidden;
+    }
+    #goban { width:100%; height:100%; display:block; cursor:crosshair; }
+
+    /* GAME OVER */
+    #game-over-overlay {
+      display:none; position:absolute; inset:0; background:rgba(253,246,227,.93);
+      align-items:center; justify-content:center; flex-direction:column; gap:1rem; z-index:10;
+    }
+    #game-over-overlay.show { display:flex; }
+    .game-over-title { font-family:'Noto Serif',serif; font-size:1.8rem; font-weight:700; }
+    .game-over-score { font-size:1rem; color:var(--muted); font-weight:600; }
+
+    /* TURN */
+    .turn-indicator { display:flex; align-items:center; gap:.6rem; font-size:.85rem; font-weight:600; color:var(--muted); }
+    .turn-stone { width:20px; height:20px; border-radius:50%; transition:background .3s; }
+    .turn-stone.black { background:radial-gradient(circle at 35% 30%,#555,#111); box-shadow:0 2px 4px rgba(0,0,0,.4); }
+    .turn-stone.white { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .thinking-badge {
+      display:none; align-items:center; gap:.4rem;
+      font-size:.78rem; color:var(--wood-dark); font-weight:600;
+      padding:.2rem .6rem; border:1px solid var(--wood); border-radius:20px; background:var(--wood-light);
+    }
+    .thinking-badge.show { display:flex; }
+    .think-dots span { display:inline-block; width:4px; height:4px; border-radius:50%; background:var(--wood-dark); animation:dot-bounce 1.2s infinite; }
+    .think-dots span:nth-child(2) { animation-delay:.2s; }
+    .think-dots span:nth-child(3) { animation-delay:.4s; }
+
+    /* RIGHT PANEL */
+    .score-display {
+      display:flex; justify-content:space-around; background:var(--paper);
+      border:1px solid var(--border); border-radius:var(--r); padding:.6rem;
+    }
+    .score-item { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+    .score-stone { width:16px; height:16px; border-radius:50%; }
+    .score-stone.b { background:radial-gradient(circle at 35% 30%,#555,#111); }
+    .score-stone.w { background:radial-gradient(circle at 35% 30%,#fff,#ccc); border:1px solid #bbb; }
+    .score-val { font-family:'JetBrains Mono',monospace; font-size:1.1rem; font-weight:500; }
+    .score-label { font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+
+    .winrate-wrap { display:flex; flex-direction:column; gap:.3rem; }
+    .winrate-bar-track {
+      width:100%; height:14px; background:var(--paper);
+      border:1px solid var(--border); border-radius:8px; overflow:hidden;
+    }
+    .winrate-bar-black {
+      height:100%; background:linear-gradient(90deg,#333,#111);
+      border-radius:8px 0 0 8px; transition:width .5s ease; width:50%;
+    }
+    .winrate-labels { display:flex; justify-content:space-between; font-size:.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+    #analysis-box {
+      background:var(--paper); border:1px solid var(--border); border-radius:var(--r);
+      padding:.65rem .75rem; font-family:'JetBrains Mono',monospace; font-size:.75rem;
+      color:var(--ink); min-height:70px; line-height:1.6;
+    }
+    .aline { display:flex; justify-content:space-between; padding:.15rem 0; border-bottom:1px solid var(--paper-dark); }
+    .aline:last-child { border-bottom:none; }
+    .akey { color:var(--muted); }
+    .aval.good { color:var(--green); }
+    .aval.bad  { color:var(--red); }
+    .aval.info { color:var(--blue); }
+
+    #move-list {
+      flex:1; overflow-y:auto; background:var(--paper); border:1px solid var(--border);
+      border-radius:var(--r); padding:.5rem; max-height:220px;
+      font-family:'JetBrains Mono',monospace; font-size:.73rem;
+    }
+    .me { display:flex; align-items:center; gap:.4rem; padding:.2rem .35rem; border-radius:2px; cursor:pointer; transition:background .1s; }
+    .me:hover { background:var(--paper-dark); }
+    .me.cur { background:var(--wood-light); font-weight:600; }
+    .mn { color:var(--muted); min-width:24px; }
+    .mp { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .mp.b { background:#111; }
+    .mp.w { background:#ddd; border:1px solid #aaa; }
+
+    /* MODEL LOADING OVERLAY */
+    #model-overlay {
+      position:fixed; inset:0; background:rgba(253,246,227,.96);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:1.5rem; z-index:100;
+    }
+    #model-overlay.hidden { display:none; }
+    .mlogo { font-family:'Noto Serif',serif; font-size:1.8rem; font-weight:700; letter-spacing:.1em; }
+    .msub  { font-size:.82rem; color:var(--muted); }
+    .pw { width:300px; }
+    .btrack { width:100%; height:7px; background:var(--paper-dark); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+    .bfill  { height:100%; width:0%; background:linear-gradient(90deg,var(--wood),var(--wood-dark)); border-radius:4px; transition:width .3s; }
+    .bmsg   { font-size:.8rem; color:var(--muted); text-align:center; margin-top:.6rem; }
+
+    /* model yok uyarısı */
+    #no-model-msg {
+      display:none; background:#fff8e1; border:1.5px solid var(--wood);
+      border-radius:var(--r); padding:.75rem 1rem; font-size:.78rem; color:var(--ink); line-height:1.7;
+    }
+    #no-model-msg.show { display:block; }
+    #no-model-msg a { color:var(--wood-dark); }
+    #no-model-msg code { background:var(--paper-dark); padding:.1rem .3rem; border-radius:2px; font-family:'JetBrains Mono',monospace; font-size:.72rem; }
+
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes dot-bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px)} }
+    #move-list::-webkit-scrollbar { width:4px; }
+    #move-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+    @media(max-width:900px) { .main{grid-template-columns:1fr} .board-container{max-width:480px} }
+    @media(max-width:540px) { .topbar{padding:.6rem 1rem} .main{padding:1rem .75rem} }
+  </style>
+</head>
+<body>
+
+<!-- MODEL LOADING OVERLAY -->
+<div id="model-overlay">
+  <div class="mlogo">囲碁 · KataNet</div>
+  <div class="msub">TensorFlow.js ile KataGo sinir ağı yükleniyor</div>
+  <div class="pw">
+    <div class="btrack"><div class="bfill" id="bfill"></div></div>
+    <div class="bmsg" id="bmsg">Başlatılıyor…</div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="index.html">← Ana Sayfa</a>
+    <span class="page-title">Etüd — KataNet Antrenman</span>
+    <span class="engine-badge" id="engine-badge">KataGo · TF.js</span>
+  </div>
+  <div class="katago-status">
+    <div class="status-dot loading" id="sdot"></div>
+    <span id="slabel">Yükleniyor…</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- SOL: AYARLAR -->
+  <div class="panel">
+    <div class="panel-title">Oyun Ayarları</div>
+
+    <div class="setting-group">
+      <div class="setting-label">Taş Rengim</div>
+      <div class="color-picker">
+        <button class="color-btn black active" id="btn-black" onclick="setColor('black')">
+          <span class="stone-sm"></span> Siyah
+        </button>
+        <button class="color-btn white" id="btn-white" onclick="setColor('white')">
+          <span class="stone-sm"></span> Beyaz
+        </button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Tahta Boyutu</div>
+      <div class="select-wrap">
+        <select id="board-size">
+          <option value="19" selected>19×19 (Standart)</option>
+          <option value="13">13×13 (Orta)</option>
+          <option value="9">9×9 (Başlangıç)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Handikap</div>
+      <div class="select-wrap">
+        <select id="handicap">
+          <option value="0" selected>0 (Eşit)</option>
+          <option value="2">2 taş</option><option value="3">3 taş</option>
+          <option value="4">4 taş</option><option value="5">5 taş</option>
+          <option value="6">6 taş</option><option value="7">7 taş</option>
+          <option value="8">8 taş</option><option value="9">9 taş</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Komi</div>
+      <div class="select-wrap">
+        <select id="komi">
+          <option value="0">0</option><option value="0.5">0.5</option>
+          <option value="5.5">5.5</option><option value="6.5" selected>6.5</option>
+          <option value="7.5">7.5</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">AI Seviyesi</div>
+      <div class="select-wrap">
+        <select id="ai-level">
+          <option value="kyu">~6 Kyu (Başlangıç)</option>
+          <option value="dan" selected>~2 Dan (Güçlü)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="no-model-msg">
+      ⚠️ <strong>Model dosyaları bulunamadı</strong><br/>
+      Simülasyon modunda çalışılıyor.<br/><br/>
+      Gerçek AI için repo'na ekle:<br/>
+      <code>katago/model/b10c128.../</code><br/><br/>
+      <a href="https://github.com/maksimKorzh/kata-model-js" target="_blank">→ Kaynak repo</a>
+    </div>
+
+    <button class="action-btn primary" id="start-btn" onclick="startGame()" disabled>
+      Oyunu Başlat
+    </button>
+  </div>
+
+  <!-- ORTA: TAHTA -->
+  <div class="board-wrap">
+    <div class="turn-indicator">
+      <div class="turn-stone black" id="turn-stone"></div>
+      <span id="turn-text">Oyun başlatılmadı</span>
+      <div class="thinking-badge" id="thinking-badge">
+        <span>KataNet düşünüyor</span>
+        <div class="think-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <div class="board-container">
+      <canvas id="goban"></canvas>
+      <div id="game-over-overlay">
+        <div class="game-over-title" id="go-title">Oyun Bitti</div>
+        <div class="game-over-score" id="go-score"></div>
+        <button class="action-btn primary" style="width:160px" onclick="resetGame()">Tekrar Oyna</button>
+      </div>
+    </div>
+
+    <div class="btn-row" style="width:100%;max-width:580px">
+      <button class="action-btn" onclick="passTurn()"    id="pass-btn"   disabled>Pas Geç</button>
+      <button class="action-btn" onclick="undoMove()"    id="undo-btn"   disabled>Geri Al</button>
+      <button class="action-btn" onclick="resignGame()"  id="resign-btn" disabled style="color:var(--red)">Teslim Ol</button>
+    </div>
+  </div>
+
+  <!-- SAĞ: ANALİZ -->
+  <div class="panel">
+    <div class="panel-title">Analiz</div>
+
+    <div class="score-display">
+      <div class="score-item">
+        <div class="score-stone b"></div>
+        <div class="score-val" id="score-b">0</div>
+        <div class="score-label">Siyah</div>
+      </div>
+      <div class="score-item">
+        <div class="score-stone w"></div>
+        <div class="score-val" id="score-w">0</div>
+        <div class="score-label">Beyaz</div>
+      </div>
+      <div class="score-item">
+        <div style="font-size:1rem;line-height:16px;color:var(--muted)">±</div>
+        <div class="score-val" id="move-count">0</div>
+        <div class="score-label">Hamle</div>
+      </div>
+    </div>
+
+    <div class="winrate-wrap">
+      <div class="setting-label">Kazanma Oranı</div>
+      <div class="winrate-bar-track">
+        <div class="winrate-bar-black" id="wr-bar"></div>
+      </div>
+      <div class="winrate-labels">
+        <span>● <span id="wr-b">50%</span></span>
+        <span><span id="wr-w">50%</span> ○</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title" style="margin-bottom:.5rem">KataNet Değerlendirmesi</div>
+      <div id="analysis-box">
+        <div style="color:var(--muted);font-size:.78rem;">Oyun başladığında analiz burada görünecek.</div>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <div class="setting-label">Son Hamle</div>
+      <div id="last-move" style="font-family:'JetBrains Mono',monospace;font-size:.82rem;padding:.35rem .5rem;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);">—</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:.35rem;flex:1;min-height:0">
+      <div class="setting-label">Hamle Geçmişi</div>
+      <div id="move-list"></div>
+    </div>
+
+    <button class="action-btn" onclick="requestHint()" id="hint-btn" disabled style="color:var(--blue);border-color:var(--blue)">
+      💡 İpucu İste
+    </button>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+/* ═══════════════════════════════════════
+   SABITLER
+═══════════════════════════════════════ */
+const LTRS = 'ABCDEFGHJKLMNOPQRST';
+// Model yolu — repo'nuzda olması gerekiyor
+const MODEL_PATH = 'katago/model/b10c128-s1141046784-d204142634/model.json';
+
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+const G = {
+  playerColor: 'black',
+  size: 19,
+  komi: 6.5,
+  turn: 'black',
+  moveNum: 0,
+  history: [],
+  captures: { black:0, white:0 },
+  active: false,
+  over: false,
+  passes: 0,
+  model: null,
+  modelOk: false,
+};
+let grid = [];
+let lastXY = null;
+
+/* ═══════════════════════════════════════
+   YARDIMCILAR
+═══════════════════════════════════════ */
+const opp  = c => c==='black'?'white':'black';
+const inB  = (x,y,s) => x>=0&&y>=0&&x<s&&y<s;
+const toGtp= (x,y,s) => LTRS[x]+(s-y);
+const fromGtp=(c,s)=>{ if(!c||c==='PAS') return[-1,-1]; const x=LTRS.indexOf(c[0].toUpperCase()); return[x,s-parseInt(c.slice(1))]; };
+
+/* ═══════════════════════════════════════
+   MODEL — TensorFlow.js
+   Ref: github.com/maksimKorzh/kata-model-js
+═══════════════════════════════════════ */
+function prog(pct,msg) {
+  document.getElementById('bfill').style.width = pct+'%';
+  document.getElementById('bmsg').textContent  = msg;
+}
+
+async function loadModel() {
+  prog(5,'TensorFlow.js hazırlanıyor…');
+  try {
+    // En hızlı backend seç
+    const backends = ['webgl','wasm','cpu'];
+    for (const b of backends) {
+      try { await tf.setBackend(b); await tf.ready(); break; } catch {}
+    }
+    prog(20,`Backend: ${tf.getBackend()} — model yükleniyor…`);
+
+    G.model = await tf.loadLayersModel(MODEL_PATH, {
+      onProgress: f => prog(20 + Math.floor(f*70), `Ağırlıklar: %${Math.floor(f*100)}`)
+    });
+
+    prog(95,'Warmup çalışıyor…');
+    await warmup();
+    prog(100,'KataNet hazır ✓');
+    setTimeout(onModelReady, 350);
+
+  } catch(err) {
+    console.warn('Model yüklenemedi:', err.message);
+    onModelFail();
+  }
+}
+
+async function warmup() {
+  // Dummy tensor ile GPU'yu ısıt (ilk gerçek inference yavaş olmasın)
+  tf.tidy(() => {
+    const bi = tf.zeros([1, G.size, G.size, 22]);
+    const gi = tf.zeros([1, 19]);
+    const out = G.model.predict([bi, gi]);
+    if (Array.isArray(out)) out.forEach(t=>t.dispose());
+    else out.dispose();
+  });
+}
+
+function onModelReady() {
+  G.modelOk = true;
+  document.getElementById('model-overlay').classList.add('hidden');
+  document.getElementById('sdot').className    = 'status-dot ready';
+  document.getElementById('slabel').textContent = 'KataNet Hazır';
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('engine-badge').textContent = 'KataGo · TF.js ✓';
+}
+
+function onModelFail() {
+  G.modelOk = false;
+  document.getElementById('model-overlay').classList.add('hidden');
+  document.getElementById('sdot').className    = 'status-dot sim';
+  document.getElementById('slabel').textContent = 'Simülasyon Modu';
+  document.getElementById('engine-badge').textContent = 'Simülasyon';
+  document.getElementById('no-model-msg').classList.add('show');
+  document.getElementById('start-btn').disabled  = false;
+  document.getElementById('start-btn').textContent = 'Simülasyonu Başlat';
+}
+
+/* ── BOARD FEATURE TENSORS ──
+   KataGo giriş kanalları (22 ch):
+   Ch 0 : current player (pla) taşları
+   Ch 1 : opponent (opp) taşları
+   Ch 6 : siyah oynarsa 1
+   Ch 7 : bias (hep 1)
+   Kaynak: maksimKorzh/kata-model-js/js/kata.js
+*/
+function buildInputs(g, turn, size, komi) {
+  const bi = new Float32Array(size*size*22);
+  const gi = new Float32Array(19);
+
+  const pla = turn, op = opp(turn);
+  for (let y=0;y<size;y++) for (let x=0;x<size;x++) {
+    const base = (y*size+x)*22;
+    if (g[y][x]===pla) bi[base]   = 1;
+    if (g[y][x]===op)  bi[base+1] = 1;
+    if (turn==='black') bi[base+6] = 1;
+    bi[base+7] = 1; // bias
+  }
+  gi[0] = komi/20;         // normalize komi
+  gi[5] = turn==='black'?1:0;
+  return {
+    bi: tf.tensor4d(bi,[1,size,size,22]),
+    gi: tf.tensor2d(gi,[1,19])
+  };
+}
+
+/* KataNet'ten hamle al */
+async function getAIMove(level) {
+  if (!G.model) return { move: simMove(), winrate:0.5 };
+
+  return tf.tidy(() => {
+    const { bi, gi } = buildInputs(grid, G.turn, G.size, G.komi);
+    const outs = G.model.predict([bi, gi]);
+
+    const policy = (Array.isArray(outs)?outs[0]:outs).dataSync();
+    const value  =  Array.isArray(outs)&&outs.length>1 ? outs[1].dataSync() : null;
+
+    // Kyu modu: opp/pla swap → ağ geride sandığından yavaş oynar
+    const eff = level==='kyu' ? policy.map((_,i)=>policy[policy.length-1-i]) : policy;
+
+    const move = bestMove(eff);
+    const wr   = value ? (G.turn==='black' ? value[0] : value[1]) : 0.5;
+    return { move, winrate: wr };
+  });
+}
+
+function bestMove(policy) {
+  const cands = [];
+  for (let y=0;y<G.size;y++)
+    for (let x=0;x<G.size;x++)
+      if (!grid[y][x]) cands.push({x,y,p:policy[y*G.size+x]});
+  if (!cands.length) return null;
+  cands.sort((a,b)=>b.p-a.p);
+  const top = cands.slice(0, Math.min(5, cands.length));
+  const pick = top[Math.floor(Math.random()*top.length)];
+  return [pick.x, pick.y];
+}
+
+function simMove() {
+  const e=[];
+  for (let y=0;y<G.size;y++) for (let x=0;x<G.size;x++) if(!grid[y][x]) e.push([x,y]);
+  return e.length ? e[Math.floor(Math.random()*e.length)] : null;
+}
+
+/* ═══════════════════════════════════════
+   CANVAS TAHTA
+═══════════════════════════════════════ */
+function initCanvas() {
+  const cv = document.getElementById('goban');
+  const wrap = cv.parentElement;
+  const fit = () => {
+    const r = wrap.getBoundingClientRect();
+    cv.width = r.width||560; cv.height = r.height||560;
+    drawBoard();
+  };
+  setTimeout(fit,50);
+  window.addEventListener('resize',fit);
+
+  grid = Array.from({length:G.size},()=>Array(G.size).fill(null));
+
+  cv.onclick = e => {
+    if (!G.active||G.over||G.turn!==G.playerColor) return;
+    const r=cv.getBoundingClientRect();
+    const sx=cv.width/r.width, sy=cv.height/r.height;
+    const cx=(e.clientX-r.left)*sx, cy=(e.clientY-r.top)*sy;
+    const {m,st} = met(cv.width);
+    const xi=Math.round((cx-m)/st), yi=Math.round((cy-m)/st);
+    if (!inB(xi,yi,G.size)||grid[yi][xi]) return;
+    onPlayerMove(xi,yi);
+  };
+}
+
+function met(s) {
+  const m=s*.06, st=(s-m*2)/(G.size-1);
+  return {m,st};
+}
+
+function drawBoard() {
+  const cv=document.getElementById('goban');
+  const ctx=cv.getContext('2d');
+  const s=cv.width; const {m,st}=met(s);
+
+  ctx.fillStyle='#dcb468'; ctx.fillRect(0,0,s,s);
+  const gr=ctx.createLinearGradient(0,0,s,s);
+  gr.addColorStop(0,'rgba(255,220,120,.18)'); gr.addColorStop(1,'rgba(140,80,0,.10)');
+  ctx.fillStyle=gr; ctx.fillRect(0,0,s,s);
+
+  ctx.strokeStyle='#7a5010'; ctx.lineWidth=1;
+  for (let i=0;i<G.size;i++) {
+    const px=m+i*st, py=m+i*st;
+    ctx.beginPath(); ctx.moveTo(px,m);  ctx.lineTo(px,m+(G.size-1)*st); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(m,py); ctx.lineTo(m+(G.size-1)*st,py);  ctx.stroke();
+  }
+  ctx.fillStyle='#7a5010';
+  for (const [sx2,sy2] of stars()) {
+    ctx.beginPath(); ctx.arc(m+sx2*st,m+sy2*st,st*.09,0,Math.PI*2); ctx.fill();
+  }
+  ctx.font=`${Math.max(9,st*.32)}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for (let i=0;i<G.size;i++) {
+    const px=m+i*st;
+    ctx.fillText(LTRS[i],px,m*.45); ctx.fillText(LTRS[i],px,s-m*.45);
+    ctx.fillText(String(G.size-i),m*.45,m+i*st); ctx.fillText(String(G.size-i),s-m*.45,m+i*st);
+  }
+  for (let y=0;y<G.size;y++)
+    for (let x=0;x<G.size;x++)
+      if (grid[y][x]) stone(ctx,m+x*st,m+y*st,st*.46,grid[y][x],lastXY&&lastXY[0]===x&&lastXY[1]===y);
+}
+
+function stone(ctx,cx,cy,r,col,mark) {
+  ctx.save();
+  if (col==='black') {
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#555'); g.addColorStop(1,'#111'); ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=4; ctx.shadowOffsetX=2; ctx.shadowOffsetY=2;
+  } else {
+    const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);
+    g.addColorStop(0,'#fff'); g.addColorStop(1,'#ccc'); ctx.fillStyle=g;
+    ctx.shadowColor='rgba(0,0,0,.3)'; ctx.shadowBlur=3; ctx.shadowOffsetX=1; ctx.shadowOffsetY=2;
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  if (col==='white') { ctx.strokeStyle='#aaa'; ctx.lineWidth=.5; ctx.stroke(); }
+  if (mark) {
+    ctx.shadowColor='transparent';
+    ctx.strokeStyle=col==='black'?'rgba(255,255,255,.7)':'rgba(0,0,0,.5)';
+    ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(cx,cy,r*.38,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function stars() {
+  if (G.size===19) return [[3,3],[9,3],[15,3],[3,9],[9,9],[15,9],[3,15],[9,15],[15,15]];
+  if (G.size===13) return [[3,3],[9,3],[3,9],[9,9],[6,6]];
+  return [[2,2],[6,2],[4,4],[2,6],[6,6]];
+}
+
+/* ═══════════════════════════════════════
+   OYUN AKIŞI
+═══════════════════════════════════════ */
+function startGame() {
+  G.size    = parseInt(document.getElementById('board-size').value);
+  G.komi    = parseFloat(document.getElementById('komi').value);
+  G.turn    = 'black'; G.moveNum=0; G.history=[]; G.active=true; G.over=false; G.passes=0;
+  G.captures= {black:0,white:0}; lastXY=null;
+
+  initCanvas();
+  document.getElementById('move-list').innerHTML='';
+  document.getElementById('score-b').textContent=document.getElementById('score-w').textContent=document.getElementById('move-count').textContent='0';
+  document.getElementById('game-over-overlay').classList.remove('show');
+  ['pass-btn','undo-btn','resign-btn','hint-btn'].forEach(id=>document.getElementById(id).disabled=false);
+  document.getElementById('start-btn').textContent='Yeniden Başlat';
+  setWinrate(0.5);
+  updateAn({info:'Oyun başladı!'});
+  updateTurn();
+
+  if (G.playerColor==='white') aiPlay();
+}
+
+function onPlayerMove(x,y) {
+  if (!G.active||G.over||G.turn!==G.playerColor||grid[y][x]) return;
+  place(x,y,G.playerColor); G.passes=0;
+  capture(x,y,G.playerColor);
+  const c=toGtp(x,y,G.size);
+  addHist(G.playerColor,c);
+  document.getElementById('last-move').textContent=`${G.playerColor==='black'?'●':'○'} ${c}`;
+  G.turn=opp(G.playerColor); updateTurn(); updateScores();
+  setTimeout(()=>aiPlay(),150);
+}
+
+async function aiPlay() {
+  const ai=opp(G.playerColor);
+  if (!G.active||G.over||G.turn!==ai) return;
+  document.getElementById('thinking-badge').classList.add('show');
+
+  let res;
+  try {
+    const lv=document.getElementById('ai-level').value;
+    res = await getAIMove(lv);
+  } catch(e) { res={move:simMove(),winrate:.5}; }
+
+  document.getElementById('thinking-badge').classList.remove('show');
+
+  const {move,winrate}=res;
+  const wrB = ai==='black' ? winrate : 1-winrate;
+  setWinrate(wrB);
+
+  if (!move) {
+    G.passes++;
+    addHist(ai,'PAS');
+    document.getElementById('last-move').textContent=`${ai==='black'?'●':'○'} PAS`;
+    if (G.passes>=2) { endGame('score'); return; }
+  } else {
+    const [ax,ay]=move;
+    place(ax,ay,ai); G.passes=0;
+    capture(ax,ay,ai);
+    const c=toGtp(ax,ay,G.size);
+    addHist(ai,c);
+    document.getElementById('last-move').textContent=`${ai==='black'?'●':'○'} ${c}`;
+    updateAn({
+      move:c,
+      winrate:wrB,
+      score:((wrB-.5)*20).toFixed(1)
+    });
+  }
+  G.turn=G.playerColor; updateTurn(); updateScores();
+}
+
+function place(x,y,col) {
+  grid[y][x]=col; lastXY=[x,y]; G.moveNum++; drawBoard();
+}
+
+function passTurn() {
+  if (!G.active||G.over||G.turn!==G.playerColor) return;
+  G.passes++; G.moveNum++;
+  addHist(G.playerColor,'PAS');
+  document.getElementById('last-move').textContent='Pas geçildi';
+  if (G.passes>=2) { endGame('score'); return; }
+  G.turn=opp(G.playerColor); updateTurn();
+  setTimeout(()=>aiPlay(),300);
+}
+
+function undoMove() {
+  if (!G.active||G.moveNum<2) return;
+  for (let i=0;i<2&&G.history.length;i++) {
+    const h=G.history.pop();
+    if (h.coord!=='PAS') { const[x,y]=fromGtp(h.coord,G.size); if(x!==-1) grid[y][x]=null; }
+    G.moveNum=Math.max(0,G.moveNum-1);
+  }
+  lastXY=null;
+  if (G.history.length) { const l=G.history[G.history.length-1]; if(l.coord!=='PAS'){const[x,y]=fromGtp(l.coord,G.size);if(x!==-1)lastXY=[x,y];} }
+  G.turn=G.playerColor; renderHist(); updateScores(); updateTurn(); drawBoard();
+  updateAn({info:'Hamle geri alındı.'});
+}
+
+function resignGame() {
+  if (!G.active||G.over) return;
+  endGame('resign',opp(G.playerColor));
+}
+
+function endGame(reason,winner) {
+  G.over=true; G.active=false;
+  let title,score;
+  if (reason==='resign') { title=(winner==='black'?'Siyah':'Beyaz')+' Kazandı!'; score='Rakip teslim oldu.'; }
+  else {
+    const b=grid.flat().filter(c=>c==='black').length+G.captures.black;
+    const w=grid.flat().filter(c=>c==='white').length+G.captures.white+G.komi;
+    title=b>w?'Siyah Kazandı!':'Beyaz Kazandı!';
+    score=`Siyah: ${b} · Beyaz: ${w.toFixed(1)}`;
+  }
+  document.getElementById('go-title').textContent=title;
+  document.getElementById('go-score').textContent=score;
+  document.getElementById('game-over-overlay').classList.add('show');
+  ['pass-btn','undo-btn','resign-btn','hint-btn'].forEach(id=>document.getElementById(id).disabled=true);
+}
+
+function resetGame() { startGame(); }
+
+/* CAPTURES */
+function capture(mx,my,col) {
+  let cap=0;
+  for (const[dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+    const nx=mx+dx,ny=my+dy;
+    if (!inB(nx,ny,G.size)||grid[ny][nx]!==opp(col)) continue;
+    const grp=getGroup(nx,ny);
+    if (!liberties(grp).length) { grp.forEach(([gx,gy])=>grid[gy][gx]=null); cap+=grp.length; }
+  }
+  if (cap) { G.captures[col]+=cap; drawBoard(); }
+}
+
+function getGroup(x,y) {
+  const col=grid[y][x],vis=new Set(),q=[[x,y]],r=[];
+  while(q.length){const[cx,cy]=q.shift(),k=`${cx},${cy}`;if(vis.has(k))continue;vis.add(k);if(!inB(cx,cy,G.size)||grid[cy][cx]!==col)continue;r.push([cx,cy]);for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]])q.push([cx+dx,cy+dy]);}
+  return r;
+}
+
+function liberties(grp) {
+  const s=new Set();
+  for(const[x,y]of grp)for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=x+dx,ny=y+dy;if(inB(nx,ny,G.size)&&!grid[ny][nx])s.add(`${nx},${ny}`);}
+  return[...s];
+}
+
+/* UI */
+function setColor(c) {
+  G.playerColor=c;
+  document.getElementById('btn-black').classList.toggle('active',c==='black');
+  document.getElementById('btn-white').classList.toggle('active',c==='white');
+}
+
+function updateTurn() {
+  const isP=G.turn===G.playerColor;
+  document.getElementById('turn-stone').className='turn-stone '+G.turn;
+  document.getElementById('turn-text').textContent=(G.turn==='black'?'Siyah':'Beyaz')+"'ın sırası"+(isP?' (Sen)':' (KataNet)');
+}
+
+function updateScores() {
+  document.getElementById('score-b').textContent=G.captures.black;
+  document.getElementById('score-w').textContent=G.captures.white;
+  document.getElementById('move-count').textContent=G.moveNum;
+}
+
+function setWinrate(bWr) {
+  const p=Math.round(bWr*100);
+  document.getElementById('wr-bar').style.width=p+'%';
+  document.getElementById('wr-b').textContent=p+'%';
+  document.getElementById('wr-w').textContent=(100-p)+'%';
+}
+
+function addHist(player,coord) {
+  G.history.push({n:G.history.length+1,player,coord}); renderHist();
+}
+
+function renderHist() {
+  const el=document.getElementById('move-list');
+  el.innerHTML='';
+  G.history.forEach((h,i)=>{
+    const d=document.createElement('div');
+    d.className='me'+(i===G.history.length-1?' cur':'');
+    d.innerHTML=`<span class="mn">${h.n}.</span><span class="mp ${h.player==='black'?'b':'w'}"></span><span>${h.coord}</span>`;
+    el.appendChild(d);
+  });
+  el.scrollTop=el.scrollHeight;
+}
+
+function updateAn(d) {
+  const box=document.getElementById('analysis-box');
+  const L=(k,v,c='')=>`<div class="aline"><span class="akey">${k}</span><span class="aval ${c}">${v}</span></div>`;
+  let h='';
+  if(d.info) h+=L('Durum',d.info,'info');
+  if(d.move) h+=L('Son Hamle',d.move);
+  if(d.winrate!==undefined){
+    const p=(d.winrate*100).toFixed(1),c=d.winrate>.55?'good':d.winrate<.45?'bad':'info';
+    const lbl=d.winrate>.55?'Siyah avantajlı':d.winrate<.45?'Beyaz avantajlı':'Dengeli';
+    h+=L('Pozisyon',lbl,c);
+    h+=L('Kazanma %',`●${p}% ○${(100-parseFloat(p)).toFixed(1)}%`,c);
+  }
+  if(d.score) h+=L('Puan Farkı',(d.score>0?'+':'')+d.score);
+  if(d.hint)  h+=L('İpucu',d.hint,'info');
+  box.innerHTML=h||'<div style="color:var(--muted);font-size:.78rem;">Analiz bekleniyor…</div>';
+}
+
+async function requestHint() {
+  if (!G.active||G.over) return;
+  updateAn({info:'İpucu hesaplanıyor…'});
+  try {
+    const lv=document.getElementById('ai-level').value;
+    const res=await getAIMove(lv);
+    if(res.move) updateAn({hint:`Önerilen: ${toGtp(res.move[0],res.move[1],G.size)}`});
+    else updateAn({hint:'Pas geçmeyi düşün.'});
+  } catch { updateAn({hint:'İpucu alınamadı.'}); }
+}
+
+/* BAŞLAT */
+window.addEventListener('DOMContentLoaded', loadModel);
+</script>
+</body>
+</html>
