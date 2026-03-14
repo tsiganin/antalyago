@@ -1,58 +1,34 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Antalya Go - Hızlı Yükleme</title>
-    
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/wgo@2.3.1/wgo.player.css">
+    <title>Antalya Go</title>
     <script src="https://cdn.jsdelivr.net/npm/wgo@2.3.1/wgo.min.js"></script>
-
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; flex-direction: column; align-items: center; background: #fdf6e3; margin: 0; padding: 20px; }
-        #goban-box { 
-            width: 450px; 
-            height: 450px; 
-            margin-top: 10px; 
-            border: 6px solid #5d4037; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            background: #deb887; 
-        }
-        #status { font-size: 1.5rem; margin: 15px 0; color: #2c3e50; font-weight: bold; }
-        h1 { color: #5d4037; margin-bottom: 5px; }
+        body { background: #e0e0e0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        #goban { width: 450px; height: 450px; background: #f3c27b; border: 5px solid #4a3000; cursor: crosshair; }
+        #msg { font-family: sans-serif; font-weight: bold; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-
-    <h1>Antalya Go Topluluğu</h1>
-    <div id="status">Hazırlanıyor...</div>
-
-    <div id="goban-box">
-        <div id="board-element" style="width: 100%; height: 100%;"></div>
-    </div>
+    <div id="msg">Tahta Hazır (Tıklayarak Taş Koy)</div>
+    <div id="goban"></div>
 
     <script>
-        // Sayfa ve kütüphane hazır olduğunda tek sefer çalışacak
-        window.addEventListener('load', function() {
+        // Sayfa yüklendiğinde çalış
+        window.onload = function() {
             if (typeof WGo !== "undefined") {
-                var board = new WGo.Board(document.getElementById("board-element"), {
-                    width: 450,
-                    size: 19
-                });
-                
-                var turn = WGo.B;
-                document.getElementById("status").innerText = "Sıra: SİYAH";
-
+                var board = new WGo.Board(document.getElementById("goban"), { width: 450, size: 19 });
+                var color = WGo.B;
                 board.addEventListener("click", function(x, y) {
-                    board.addObject({x: x, y: y, c: turn});
-                    turn = (turn === WGo.B) ? WGo.W : WGo.B;
-                    document.getElementById("status").innerText = "Sıra: " + (turn === WGo.B ? "SİYAH" : "BEYAZ");
+                    board.addObject({x: x, y: y, c: color});
+                    color = -color;
+                    document.getElementById("msg").innerText = "Sıra: " + (color == WGo.B ? "Siyah" : "Beyaz");
                 });
-                
-                console.log("Tahta başarıyla yüklendi.");
             } else {
-                document.getElementById("status").innerText = "Hata: Kütüphane yüklenemedi.";
+                document.getElementById("msg").innerText = "Hata: Kütüphane yüklenemedi!";
             }
-        });
+        };
     </script>
 </body>
 </html>
