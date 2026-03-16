@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Go Öğren – Antalya GO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Noto+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --wood:       #d4a84b;
+      --wood-dark:  #b8861a;
+      --wood-light: #f5e4a8;
+      --wood-board: #dcb468;
+      --ink:        #1a1008;
+      --paper:      #fdf6e3;
+      --paper-dark: #f0e6c8;
+      --panel:      #faf2dc;
+      --border:     #c9a840;
+      --shadow:     rgba(80,40,0,.18);
+      --green:      #27ae60;
+      --red:        #c0392b;
+      --blue:       #2471a3;
+      --muted:      #9a7840;
+      --r:          3px;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      min-height:100vh; background:var(--paper);
+      background-image:
+        radial-gradient(ellipse at 10% 5%,  rgba(212,168,75,.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 95%, rgba(184,134,26,.09) 0%, transparent 50%);
+      font-family:'Noto Sans',sans-serif; color:var(--ink);
+      display:flex; flex-direction:column; height:100vh; overflow:hidden;
+    }
+
+    /* TOPBAR */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.7rem 1.5rem; background:var(--paper-dark);
+      border-bottom:2px solid var(--border); box-shadow:0 2px 8px var(--shadow);
+      flex-shrink:0; animation:fadeDown .5s ease both;
+    }
+    .topbar-left { display:flex; align-items:center; gap:.75rem; }
+    .back-btn {
+      display:flex; align-items:center; gap:.3rem; text-decoration:none; color:var(--muted);
+      font-size:.8rem; font-weight:600; padding:.28rem .65rem;
+      border:1px solid var(--border); border-radius:var(--r); transition:all .15s;
+    }
+    .back-btn:hover { background:var(--wood); color:var(--ink); }
+    .page-title { font-family:'Noto Serif',serif; font-size:1.12rem; font-weight:700; letter-spacing:.06em; }
+    .progress-wrap { display:flex; align-items:center; gap:.75rem; }
+    .progress-text { font-size:.75rem; color:var(--muted); font-weight:600; }
+    .progress-track { width:140px; height:7px; background:var(--paper-dark); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+    .progress-fill  { height:100%; background:linear-gradient(90deg,var(--wood),var(--wood-dark)); border-radius:4px; transition:width .5s; }
+
+    /* ANA LAYOUT */
+    .app { flex:1; display:flex; overflow:hidden; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width:250px; flex-shrink:0; background:var(--panel);
+      border-right:1.5px solid var(--border); overflow-y:auto;
+    }
+    .sidebar-header {
+      padding:.85rem 1rem; border-bottom:1px solid var(--border);
+      font-family:'Noto Serif',serif; font-size:.82rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.1em; color:var(--wood-dark);
+    }
+    .chapter { border-bottom:1px solid var(--border); }
+    .chapter-title {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.65rem 1rem; font-size:.8rem; font-weight:700; color:var(--ink);
+      cursor:pointer; background:var(--paper-dark); transition:background .15s; user-select:none;
+    }
+    .chapter-title:hover { background:var(--wood-light); }
+    .ch-left { display:flex; align-items:center; gap:.5rem; }
+    .ch-num {
+      width:20px; height:20px; border-radius:50%; background:var(--wood); color:var(--ink);
+      font-size:.68rem; font-weight:700; display:flex; align-items:center; justify-content:center;
+    }
+    .ch-arrow { font-size:.7rem; color:var(--muted); transition:transform .2s; }
+    .chapter-title.open .ch-arrow { transform:rotate(90deg); }
+    .lesson-list { display:none; flex-direction:column; }
+    .lesson-list.open { display:flex; }
+    .lesson-item {
+      display:flex; align-items:center; gap:.5rem;
+      padding:.5rem 1rem .5rem 1.5rem; font-size:.78rem; cursor:pointer;
+      transition:background .12s; color:var(--muted); border-left:2px solid transparent;
+    }
+    .lesson-item:hover { background:var(--paper-dark); color:var(--ink); }
+    .lesson-item.active { background:var(--wood-light); color:var(--ink); font-weight:600; border-left-color:var(--wood-dark); }
+    .lesson-item.done { color:var(--green); }
+    .lesson-item.done .li-check { display:inline; }
+    .li-check { display:none; font-size:.7rem; }
+    .li-num { font-size:.65rem; color:var(--muted); min-width:20px; }
+
+    /* DERS ALANI */
+    .lesson-area { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+    .lesson-content {
+      flex:1; display:grid; grid-template-columns:1fr 400px;
+      overflow:hidden; min-height:0;
+    }
+
+    /* Açıklama */
+    .explain-panel {
+      padding:1.75rem 2rem; overflow-y:auto;
+      border-right:1px solid var(--border);
+      display:flex; flex-direction:column; gap:1rem;
+    }
+    .lesson-chapter-tag { font-size:.68rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--wood-dark); }
+    .lesson-title { font-family:'Noto Serif',serif; font-size:1.45rem; font-weight:700; line-height:1.25; }
+    .step-dots { display:flex; gap:.4rem; align-items:center; margin:.1rem 0; }
+    .sdot { width:8px; height:8px; border-radius:50%; background:var(--border); transition:all .3s; cursor:pointer; }
+    .sdot.active { background:var(--wood-dark); transform:scale(1.3); }
+    .sdot.done   { background:var(--green); }
+    .lesson-body { font-size:.9rem; line-height:1.75; color:#3a2a10; }
+    .lesson-body p { margin-bottom:.8rem; }
+    .lesson-body p:last-child { margin-bottom:0; }
+    .lesson-body strong { color:var(--ink); font-weight:700; }
+    .lesson-body em { font-style:italic; color:var(--wood-dark); }
+    .lesson-body ul, .lesson-body ol { margin:.4rem 0 .8rem 1.3rem; line-height:2; font-size:.87rem; }
+    .highlight {
+      background:var(--wood-light); border-left:3px solid var(--wood-dark);
+      padding:.55rem .85rem; border-radius:0 var(--r) var(--r) 0;
+      margin:.6rem 0; font-size:.86rem; line-height:1.6;
+    }
+    .term {
+      display:inline-block; background:var(--paper-dark); border:1px solid var(--border);
+      border-radius:2px; padding:.04rem .35rem;
+      font-family:'JetBrains Mono',monospace; font-size:.8rem; color:var(--wood-dark); font-weight:600;
+    }
+
+    /* Tahta */
+    .board-panel {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:1.25rem; gap:.9rem; background:var(--paper);
+    }
+    .board-container {
+      position:relative; width:100%; max-width:360px; aspect-ratio:1;
+      background:var(--wood-board); border:3px solid var(--wood-dark); border-radius:var(--r);
+      box-shadow:4px 4px 0 var(--wood-dark),0 8px 24px var(--shadow); overflow:hidden;
+    }
+    #goban { width:100%; height:100%; display:block; }
+    .feedback-box {
+      width:100%; max-width:360px; min-height:42px;
+      border-radius:var(--r); padding:.55rem .85rem;
+      font-size:.82rem; font-weight:600; line-height:1.5;
+      display:flex; align-items:center; gap:.5rem;
+      transition:all .25s; background:var(--panel); border:1.5px solid var(--border); color:var(--muted);
+    }
+    .feedback-box.correct { background:#e8f8f0; border-color:var(--green); color:#1a6b3a; }
+    .feedback-box.wrong   { background:#fde8e8; border-color:var(--red);   color:#8b1a1a; }
+    .feedback-box.info    { background:var(--wood-light); border-color:var(--wood); color:var(--ink); }
+    .fb-icon { font-size:1.1rem; flex-shrink:0; }
+
+    /* Nav */
+    .lesson-nav {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:.7rem 1.5rem; background:var(--paper-dark);
+      border-top:1.5px solid var(--border); flex-shrink:0;
+    }
+    .nav-btn {
+      display:flex; align-items:center; gap:.4rem;
+      padding:.48rem 1.1rem; border:1.5px solid var(--border); border-radius:var(--r);
+      background:var(--paper); font-family:'Noto Sans',sans-serif;
+      font-size:.82rem; font-weight:600; cursor:pointer; transition:all .15s; color:var(--ink);
+    }
+    .nav-btn.primary { background:var(--wood); border-color:var(--wood-dark); }
+    .nav-btn.primary:hover { background:var(--wood-dark); color:#fff; }
+    .nav-btn:hover:not(.primary) { background:var(--paper-dark); border-color:var(--wood-dark); }
+    .nav-btn:disabled { opacity:.35; cursor:not-allowed; }
+    .lesson-counter { font-size:.75rem; color:var(--muted); font-weight:600; font-family:'JetBrains Mono',monospace; }
+
+    /* Tamamlandı */
+    #complete-screen {
+      display:none; position:fixed; inset:0; background:rgba(253,246,227,.96);
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:1.5rem; z-index:200; padding:2rem; text-align:center;
+    }
+    #complete-screen.show { display:flex; }
+    .complete-icon  { font-size:4rem; animation:popIn .5s ease; }
+    .complete-title { font-family:'Noto Serif',serif; font-size:2rem; font-weight:700; }
+    .complete-sub   { font-size:.92rem; color:var(--muted); max-width:360px; line-height:1.7; }
+
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(16px)}  to{opacity:1;transform:translateY(0)} }
+    @keyframes popIn    { from{opacity:0;transform:scale(.6)} to{opacity:1;transform:scale(1)} }
+    @keyframes shake    { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+    .shake { animation:shake .3s ease; }
+
+    .sidebar::-webkit-scrollbar, .explain-panel::-webkit-scrollbar { width:4px; }
+    .sidebar::-webkit-scrollbar-thumb, .explain-panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+    @media(max-width:900px) {
+      .lesson-content { grid-template-columns:1fr; }
+    }
+    @media(max-width:640px) {
+      .sidebar { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TAMAMLANDI -->
+<div id="complete-screen">
+  <div class="complete-icon">🎉</div>
+  <div class="complete-title">Tebrikler!</div>
+  <div class="complete-sub" id="complete-msg">Bölümü tamamladın!</div>
+  <button class="nav-btn primary" onclick="closeComplete()" style="margin-top:.5rem">Devam Et →</button>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a class="back-btn" href="index.html">← Ana Sayfa</a>
+    <span class="page-title">Go Öğren</span>
+  </div>
+  <div class="progress-wrap">
+    <span class="progress-text" id="prog-text">0 / 0</span>
+    <div class="progress-track"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">Müfredat</div>
+    <div id="curriculum"></div>
+  </div>
+
+  <!-- DERS -->
+  <div class="lesson-area">
+    <div class="lesson-content">
+
+      <div class="explain-panel">
+        <div class="lesson-chapter-tag" id="chapter-tag"></div>
+        <div class="lesson-title"       id="lesson-title">Ders Seç</div>
+        <div class="step-dots"          id="step-dots"></div>
+        <div class="lesson-body"        id="lesson-body">
+          <p>Soldan bir ders seçerek Go öğrenmeye başlayın.</p>
+        </div>
+      </div>
+
+      <div class="board-panel">
+        <div class="board-container">
+          <canvas id="goban"></canvas>
+        </div>
+        <div class="feedback-box info" id="feedback">
+          <span class="fb-icon">💡</span>
+          <span id="fb-text">Bir ders seçin.</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="lesson-nav">
+      <button class="nav-btn" id="btn-prev" onclick="prevStep()" disabled>← Geri</button>
+      <span class="lesson-counter" id="step-counter"></span>
+      <button class="nav-btn primary" id="btn-next" onclick="nextStep()">İleri →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════
+   MÜFREDAт
+══════════════════════════════════════════════ */
+const CURRICULUM = [
+
+  /* ─── BÖLÜM 1 ─── */
+  { id:'c1', title:'Temel Kurallar', lessons:[
+
+    { id:'l1', title:'Tahta ve Taşlar', steps:[
+      { text:`<p>Go, <strong>19×19'luk</strong> bir tahta üzerinde oynanan iki kişilik bir strateji oyunudur. Yeni başlayanlar için <strong>9×9</strong> daha uygundur.</p><p>İki oyuncu vardır: biri <strong>siyah</strong>, diğeri <strong>beyaz</strong>. <em>Siyah her zaman önce oynar.</em></p>`, board:[], auto:true, size:9, fb:{t:'Taşlar çizgilerin kesişim noktalarına yerleştirilir.',c:'info'} },
+      { text:`<p>Taşlar karelerin içine değil, <strong>çizgilerin kesişim noktalarına</strong> yerleştirilir.</p><p>Aşağıdaki tahtaya herhangi bir noktaya tıklayarak <strong>siyah taş koy.</strong></p>`, board:[], answers:'any', turn:'black', size:9, fb:{t:'Herhangi bir noktaya tıkla!',c:'info'}, fb_ok:'Mükemmel! Taşı doğru noktaya koydun.' },
+      { text:`<p>Taşlar bir kez konulduktan sonra <strong>hareket ettirilemez</strong> — sadece yakalanarak kaldırılabilir.</p><div class="highlight">Go\'da taşlar hareket etmez, sadece eklenir veya kaldırılır.</div>`, board:[{color:'W',x:4,y:4}], auto:true, size:9, fb:{t:'Bu beyaz taş artık o noktada sabit.',c:'info'} },
+    ]},
+
+    { id:'l2', title:'Özgürlükler (Liberty)', steps:[
+      { text:`<p>Her taşın komşu boş noktalarına <strong class="term">özgürlük</strong> (liberty) denir.</p><p>Ortadaki bir taşın <strong>4 özgürlüğü</strong> vardır (üst, alt, sol, sağ).</p>`, board:[{color:'B',x:4,y:4}], auto:true, size:9, fb:{t:'Ortadaki siyah taşın 4 özgürlüğü var.',c:'info'} },
+      { text:`<p>Kenar noktasındaki taşın <strong>3 özgürlüğü</strong>, köşedekinin ise <strong>2 özgürlüğü</strong> vardır.</p><div class="highlight">Özgürlük azaldıkça taş tehlikeye girer. Köşe ve kenar taşları daha savunmasızdır.</div>`, board:[{color:'B',x:0,y:0},{color:'W',x:8,y:4}], auto:true, size:9, fb:{t:'Köşe: 2 özgürlük · Kenar: 3 özgürlük · Orta: 4 özgürlük',c:'info'} },
+      { text:`<p>Yatay veya dikey olarak birbirine bağlı taşlar <strong>grup</strong> oluşturur. Grubun özgürlüğü tüm taşlarının boş komşularının toplamıdır.</p>`, board:[{color:'B',x:3,y:4},{color:'B',x:4,y:4},{color:'B',x:5,y:4}], auto:true, size:9, fb:{t:'Bu üç taş bir grup — birlikte 8 özgürlüğü var.',c:'info'} },
+    ]},
+
+    { id:'l3', title:'Taş Yakalama', steps:[
+      { text:`<p>Bir taşın <strong>tüm özgürlükleri doldurulursa</strong>, o taş yakalanır ve tahtadan kalkar.</p><p>Beyaz taşın tek boş noktası var — oraya siyah taş koyarak beyazı yakala! <strong>E6 noktasına tıkla.</strong></p>`, board:[{color:'W',x:4,y:4},{color:'B',x:3,y:4},{color:'B',x:4,y:3},{color:'B',x:5,y:4}], answer:{x:4,y:5}, turn:'black', size:9, fb:{t:'Beyaz taşın son özgürlüğüne tıkla!',c:'info'}, fb_ok:'Yakaladın! Beyaz taş tahtadan kalkar.', fb_err:'Beyaz taşın çevresindeki boş noktayı bul.', capture:[{x:4,y:4}] },
+      { text:`<p>Bir <strong>grubu</strong> yakalamak için grubun tüm özgürlüklerini doldurman gerekir.</p><p>İki beyaz taşın son özgürlüğünü doldur — <strong>D5 noktasına tıkla.</strong></p>`, board:[{color:'W',x:3,y:3},{color:'W',x:4,y:3},{color:'B',x:2,y:3},{color:'B',x:3,y:2},{color:'B',x:4,y:2},{color:'B',x:5,y:3},{color:'B',x:4,y:4}], answer:{x:3,y:4}, turn:'black', size:9, fb:{t:'İki beyaz taşın son boş noktasını bul.',c:'info'}, fb_ok:'Grubu yakaladın! İkisi birden kalkar.', fb_err:'Beyaz grubun son özgürlüğünü bul.', capture:[{x:3,y:3},{x:4,y:3}] },
+      { text:`<p>Yakalanan taşlar <strong>esir</strong> sayılır ve oyun sonunda skora eklenir.</p><div class="highlight">Ne kadar çok taş yakalarsan skor avantajın o kadar artar.</div>`, board:[{color:'B',x:2,y:2},{color:'B',x:6,y:6}], auto:true, size:9, fb:{t:'Her yakalanan taş 1 puan kazandırır.',c:'info'} },
+    ]},
+
+    { id:'l4', title:'Öz-Yakalama Yasak', steps:[
+      { text:`<p>Kendi taşını özgürlüksüz bırakacak bir hamle <strong>yapamazsın</strong> — bu <span class="term">öz-yakalama</span> yasağıdır.</p><p>Beyaz taşların sardığı orta noktaya siyah taş konamaaz — anında özgürlüksüz kalır.</p>`, board:[{color:'W',x:3,y:3},{color:'W',x:5,y:3},{color:'W',x:4,y:2},{color:'W',x:4,y:4}], auto:true, size:9, fb:{t:'E4 noktasına taş koymak yasak — öz-yakalama!',c:'info'} },
+      { text:`<p><strong>İstisna:</strong> O noktaya koyduğunda rakip taşı <em>yakalıyorsan</em> hamle geçerlidir. Yakalama, öz-yakalama yasağından önce gelir.</p><p>Beyazı yakala — <strong>E5 noktasına tıkla.</strong></p>`, board:[{color:'W',x:4,y:3},{color:'B',x:3,y:3},{color:'B',x:5,y:3},{color:'B',x:4,y:2}], answer:{x:4,y:4}, turn:'black', size:9, fb:{t:'Beyazı yakalayan hamle geçerli!',c:'info'}, fb_ok:'Doğru! Yakalama hamlesi öz-yakalama sayılmaz.', fb_err:'Beyaz taşın altındaki noktayı bul.', capture:[{x:4,y:3}] },
+    ]},
+
+    { id:'l5', title:'Ko Kuralı', steps:[
+      { text:`<p><span class="term">Ko</span> — aynı pozisyonun sonsuza tekrar etmesini önleyen kuraldır.</p><p>Bir hamle tahtayı <em>önceki pozisyona</em> döndürüyorsa, o hamle <strong>yapılamaz.</strong> Önce başka bir yerde oynamak gerekir.</p>`, board:[{color:'B',x:3,y:4},{color:'B',x:4,y:3},{color:'B',x:5,y:4},{color:'W',x:4,y:5},{color:'W',x:3,y:5},{color:'W',x:5,y:5},{color:'W',x:4,y:4}], auto:true, size:9, fb:{t:'Bu tipik bir Ko pozisyonu — döngü kuralı devreye girer.',c:'info'} },
+      { text:`<p>Ko savaşında oyuncular <strong>"ko tehdidi"</strong> yaparlar — tahtanın başka yerinde önemli bir hamle. Rakip cevap vermek zorundaysa ko durumu değişir.</p><div class="highlight">Ko, Go\'nun en dramatik ve stratejik kavramlarından biridir.</div>`, board:[{color:'B',x:3,y:4},{color:'B',x:5,y:4},{color:'B',x:4,y:3},{color:'W',x:4,y:5},{color:'W',x:3,y:5},{color:'W',x:5,y:5}], auto:true, size:9, fb:{t:'Ko pozisyonunu iyi tanıyın — sıkça karşılaşacaksınız.',c:'info'} },
+    ]},
+
+    { id:'l6', title:'Oyun Sonu ve Sayım', steps:[
+      { text:`<p>Her iki oyuncu da art arda <strong>pas geçince</strong> oyun biter.</p><p>Kazanan, <strong>daha fazla bölge (territory)</strong> çeviren oyuncudur. Bölge = etrafı sarılmış boş noktalar.</p>`, board:[{color:'B',x:1,y:1},{color:'B',x:2,y:1},{color:'B',x:3,y:1},{color:'B',x:1,y:2},{color:'B',x:3,y:2},{color:'B',x:1,y:3},{color:'B',x:2,y:3},{color:'B',x:3,y:3},{color:'W',x:5,y:5},{color:'W',x:6,y:5},{color:'W',x:7,y:5},{color:'W',x:5,y:6},{color:'W',x:7,y:6},{color:'W',x:5,y:7},{color:'W',x:6,y:7},{color:'W',x:7,y:7}], auto:true, size:9, fb:{t:'Siyah sol üstte, Beyaz sağ altta bölge sardı.',c:'info'} },
+      { text:`<p>Puan hesabı:</p><ul><li><strong>Bölge puanı</strong> — çevrelenen boş noktalar</li><li><strong>Esir puanı</strong> — yakalanan taşlar</li><li><strong>Komi</strong> — beyaza verilen avantaj (genellikle 6.5)</li></ul><div class="highlight">Komi, siyahın ilk hamle avantajını dengeler. Beyaz 6.5 puan önden başlar.</div>`, board:[], auto:true, size:9, fb:{t:'Komi genellikle 6.5\'tir.',c:'info'} },
+    ]},
+
+  ]},
+
+  /* ─── BÖLÜM 2 ─── */
+  { id:'c2', title:'Temel Teknikler', lessons:[
+
+    { id:'l7', title:'Canlı Gruplar (İki Göz)', steps:[
+      { text:`<p>Bir grup <strong>iki göze</strong> sahipse asla yakalanamaz — <em>ölümsüzdür.</em></p><p><span class="term">Göz</span> = grubun içindeki, rakibin hiçbir zaman dolduramayacağı boş nokta.</p>`, board:[{color:'B',x:0,y:0},{color:'B',x:1,y:0},{color:'B',x:2,y:0},{color:'B',x:3,y:0},{color:'B',x:4,y:0},{color:'B',x:0,y:1},{color:'B',x:4,y:1},{color:'B',x:0,y:2},{color:'B',x:2,y:2},{color:'B',x:4,y:2},{color:'B',x:0,y:3},{color:'B',x:4,y:3},{color:'B',x:0,y:4},{color:'B',x:1,y:4},{color:'B',x:2,y:4},{color:'B',x:3,y:4},{color:'B',x:4,y:4}], auto:true, size:9, fb:{t:'Bu grubun iki gözü var (B2 ve D2) — ölümsüz!',c:'info'} },
+      { text:`<p><strong>Sahte göz</strong> — rakip tarafından doldurulabilecek nokta gerçek göz değildir.</p><div class="highlight">İki gerçek göz = ölümsüz grup. Go\'nun en temel kavramlarından biridir.</div>`, board:[{color:'B',x:2,y:2},{color:'B',x:3,y:2},{color:'B',x:4,y:2},{color:'B',x:2,y:3},{color:'B',x:4,y:3},{color:'B',x:2,y:4},{color:'B',x:3,y:4},{color:'B',x:4,y:4}], auto:true, size:9, fb:{t:'Bu grubun tek gözü var (D4) — ölümsüz değil!',c:'info'} },
+    ]},
+
+    { id:'l8', title:'Kesme ve Bağlama', steps:[
+      { text:`<p><span class="term">Kesme</span> — rakibin iki taşı arasına girerek bağlantısını koparmak.</p><p>Siyahın iki taşı arasına gir — <strong>E4 noktasına tıkla.</strong></p>`, board:[{color:'B',x:3,y:3},{color:'B',x:5,y:3},{color:'W',x:4,y:2},{color:'W',x:4,y:4}], answer:{x:4,y:3}, turn:'white', size:9, fb:{t:'Siyahın iki taşı arasına gir!',c:'info'}, fb_ok:'Kestik! Siyah artık iki ayrı grup.', fb_err:'Siyahın iki taşını birbirine bağlayan boşluğu bul.' },
+      { text:`<p><span class="term">Bağlama</span> — kendi taşlarının arasını kapatarak grubu güçlendirmek.</p><p>Siyah taşları birleştir — <strong>D4 noktasına tıkla.</strong></p>`, board:[{color:'B',x:3,y:3},{color:'B',x:3,y:5},{color:'W',x:2,y:4},{color:'W',x:4,y:4}], answer:{x:3,y:4}, turn:'black', size:9, fb:{t:'Siyah taşlarını birleştir!',c:'info'}, fb_ok:'Güçlü bağlantı! Artık tek grup.', fb_err:'Siyah taşlar arasındaki boşluğu doldur.' },
+    ]},
+
+    { id:'l9', title:'Çift Atari', steps:[
+      { text:`<p><span class="term">Atari</span> — bir taşın son özgürlüğü tehdit altında. <span class="term">Çift atari</span> ise tek hamleyle iki farklı grubu aynı anda tehdit etmek.</p><p>Rakip ikisini birden kurtaramaz!</p>`, board:[{color:'W',x:2,y:3},{color:'W',x:4,y:3},{color:'B',x:2,y:2},{color:'B',x:3,y:2},{color:'B',x:4,y:2},{color:'B',x:1,y:3},{color:'B',x:2,y:4},{color:'B',x:4,y:4}], auto:true, size:9, fb:{t:'Doğru hamleyle iki beyaz gruba aynı anda atari yapılabilir.',c:'info'} },
+      { text:`<p>Çift atari hamlesini bul! <strong>D4 noktasına tıkla.</strong></p>`, board:[{color:'W',x:2,y:3},{color:'W',x:4,y:3},{color:'B',x:2,y:2},{color:'B',x:3,y:2},{color:'B',x:4,y:2},{color:'B',x:1,y:3},{color:'B',x:2,y:4},{color:'B',x:4,y:4}], answer:{x:3,y:3}, turn:'black', size:9, fb:{t:'Tek hamleyle iki grubu tehdit et!',c:'info'}, fb_ok:'Mükemmel çift atari! Beyaz ikisini birden kurtaramaz.', fb_err:'Her iki beyaz gruba da atari yapacak noktayı bul.' },
+    ]},
+
+    { id:'l10', title:'Merdiven (Shicho)', steps:[
+      { text:`<p><span class="term">Merdiven</span> (Japonca: <em>shicho</em>) — bir taşı sürekli atari yaparak köşeye sürme tekniği. Kaçan taş çapraz hareket eder ve tahtadan çıkamaz.</p>`, board:[{color:'W',x:4,y:4},{color:'B',x:3,y:4},{color:'B',x:4,y:3}], auto:true, size:9, fb:{t:'Beyaz kaçmaya çalışır ama her adımda yakalanır.',c:'info'} },
+      { text:`<p>Merdiven işe yarası için tahtada <strong>merdiveni kıran taş</strong> olmamalıdır. Eğer kaçan taşın yolunda kendi rengi bir taş varsa merdiven çalışmaz!</p><div class="highlight">Merdivene başlamadan önce tüm tahtayı kontrol et.</div>`, board:[{color:'W',x:4,y:4},{color:'W',x:7,y:1},{color:'B',x:3,y:4},{color:'B',x:4,y:3}], auto:true, size:9, fb:{t:'H2\'deki beyaz taş merdiveni kırıyor!',c:'info'} },
+    ]},
+
+    { id:'l11', title:'Ağ (Geta)', steps:[
+      { text:`<p><span class="term">Ağ</span> (Japonca: <em>geta</em>) — bir taşı atari yapmadan, kaçış yollarını keserek tuzağa düşürmek. Merdivenin aksine taş atari durumunda değildir ama kaçacak yer yoktur.</p><p>Beyazın kaçış yolunu kesen noktayı bul — <strong>F6 noktasına tıkla.</strong></p>`, board:[{color:'W',x:4,y:4},{color:'B',x:3,y:3},{color:'B',x:5,y:3},{color:'B',x:6,y:4},{color:'B',x:6,y:5}], answer:{x:5,y:5}, turn:'black', size:9, fb:{t:'Beyazın tüm kaçış yollarını kapat!',c:'info'}, fb_ok:'Ağ kuruldu! Beyaz kaçamaz.', fb_err:'Beyazın kaçış yollarını kapatan noktayı bul.' },
+    ]},
+
+    { id:'l12', title:'Snapback', steps:[
+      { text:`<p><span class="term">Snapback</span> — rakibe taş kurban vererek daha büyük bir grubu yakalama tekniği. Rakip kurbanı alınca yeni bir atari doğar ve büyük grubu kaybeder.</p><p>Snapback başlat — <strong>E7 noktasına tıkla.</strong></p>`, board:[{color:'B',x:3,y:3},{color:'B',x:4,y:3},{color:'B',x:5,y:3},{color:'B',x:3,y:4},{color:'B',x:5,y:4},{color:'B',x:3,y:5},{color:'B',x:4,y:5},{color:'W',x:4,y:4}], answer:{x:4,y:6}, turn:'black', size:9, fb:{t:'Snapback\'i başlatacak noktayı bul!',c:'info'}, fb_ok:'Snapback! Beyaz kurbanı alsa bile büyük grubu kaybeder.', fb_err:'Doğru noktayı bul — kurbanı ver.' },
+    ]},
+
+  ]},
+
+  /* ─── BÖLÜM 3 ─── */
+  { id:'c3', title:'Strateji', lessons:[
+
+    { id:'l13', title:'Açılış (Fuseki)', steps:[
+      { text:`<p><span class="term">Fuseki</span> — Go\'nun açılış aşaması. İlk 10-20 hamle tahtanın genel yapısını belirler.</p><p>Temel strateji: <strong>köşe → kenar → merkez</strong> sırasıyla bölge kurmak. Köşeler en az taşla en çok bölge sağlar.</p>`, board:[], auto:true, size:9, fb:{t:'Köşeler en değerli bölgelerdir.',c:'info'} },
+      { text:`<p>Standart açılış noktaları:<ul><li><strong>Hoshi (4-4)</strong> — dengeli, esnek</li><li><strong>Komoku (3-4)</strong> — bölge odaklı</li><li><strong>San-san (3-3)</strong> — köşe kesin, az etki</li></ul>Bir köşe noktasına tıkla.</p>`, board:[], answers:[{x:2,y:2},{x:3,y:3},{x:2,y:3},{x:3,y:2}], turn:'black', size:9, fb:{t:'Köşe noktalarından birini seç.',c:'info'}, fb_ok:'İyi seçim! Köşeden açıldın.' },
+      { text:`<p><strong>Yüksek (4. çizgi)</strong> hamleler etki alanı, <strong>alçak (3. çizgi)</strong> hamleler bölge kontrolü sağlar.</p><div class="highlight">Açılışta ne kadar çok köşe alırsan başlangıç avantajın o kadar artar.</div>`, board:[{color:'B',x:2,y:2},{color:'W',x:6,y:2},{color:'B',x:6,y:6},{color:'W',x:2,y:6}], auto:true, size:9, fb:{t:'Dört köşe de alındı — denge.',c:'info'} },
+    ]},
+
+    { id:'l14', title:'Orta Oyun', steps:[
+      { text:`<p>Orta oyunda gruplar şekillenir, savaşlar başlar. Temel hedefler:</p><ul><li>Zayıf grupları <strong>güçlendir</strong></li><li>Rakibin zayıf gruplarına <strong>saldır</strong></li><li>Bölge sınırlarını <strong>netleştir</strong></li></ul>`, board:[{color:'B',x:2,y:2},{color:'B',x:3,y:2},{color:'W',x:6,y:2},{color:'W',x:6,y:3},{color:'B',x:4,y:6},{color:'B',x:5,y:6},{color:'W',x:2,y:6},{color:'W',x:2,y:5}], auto:true, size:9, fb:{t:'Her iki taraf da bölge oluşturuyor.',c:'info'} },
+      { text:`<p><span class="term">Sente</span> — rakibin cevap vermek zorunda kaldığı hamle (inisiyatif sende).</p><p><span class="term">Gote</span> — inisiyatifi rakibe bırakan hamle.</p><div class="highlight">Mümkün olduğunca sente hamleler yap — inisiyatifi elden bırakma.</div>`, board:[], auto:true, size:9, fb:{t:'Sente = taarruz · Gote = savunma',c:'info'} },
+    ]},
+
+    { id:'l15', title:'Son Oyun (Yose)', steps:[
+      { text:`<p><span class="term">Yose</span> — oyunun son aşaması. Sınırlar netleşir, her hamle doğrudan puana dönüşür.</p><p>Yose\'de en büyük hamleyi bulmak kritik önem taşır!</p>`, board:[{color:'B',x:0,y:0},{color:'B',x:1,y:0},{color:'B',x:2,y:0},{color:'B',x:0,y:1},{color:'B',x:0,y:2},{color:'B',x:0,y:3},{color:'W',x:5,y:5},{color:'W',x:6,y:5},{color:'W',x:7,y:5},{color:'W',x:8,y:5},{color:'W',x:8,y:6},{color:'W',x:8,y:7},{color:'W',x:8,y:8}], auto:true, size:9, fb:{t:'Sınırları tamamlamak son oyunun özüdür.',c:'info'} },
+      { text:`<p>Önem sırası:</p><ol><li><strong>Sente endgame</strong> — cevap gerektiren hamleler</li><li><strong>Büyük gote</strong> — en yüksek puanlı serbest hamleler</li><li><strong>Küçük gote</strong> — ince detay hamleler</li></ol><div class="highlight">🎉 Tebrikler! Temel Go bilgisini tamamladın. Artık oynayabilirsin!</div>`, board:[], auto:true, size:9, fb:{t:'Go öğrenme yolculuğun başlıyor!',c:'info'} },
+    ]},
+
+  ]},
+];
+
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+const LTRS = 'ABCDEFGHJKLMNOPQRST';
+const inB  = (x,y,s)=>x>=0&&y>=0&&x<s&&y<s;
+const opp  = c=>c==='black'?'white':'black';
+
+let CUR_LESSON  = null;
+let CUR_STEP    = 0;
+let boardGrid   = [];
+let boardSize   = 9;
+let stepDone    = false;
+
+const ALL_LESSONS   = CURRICULUM.flatMap(c=>c.lessons);
+const TOTAL_LESSONS = ALL_LESSONS.length;
+let doneLessons = new Set(JSON.parse(localStorage.getItem('go_done')||'[]'));
+
+/* ══════════════════════════════════════════════
+   CANVAS
+══════════════════════════════════════════════ */
+function met(s,sz){ const m=s*.065,st=(s-m*2)/(sz-1); return{m,st}; }
+
+function initCanvas(sz){
+  boardSize=sz||9;
+  boardGrid=Array.from({length:boardSize},()=>Array(boardSize).fill(null));
+  const cv=document.getElementById('goban');
+  const fit=()=>{const r=cv.parentElement.getBoundingClientRect();cv.width=r.width||360;cv.height=r.height||360;drawBoard();};
+  setTimeout(fit,30);
+  window.removeEventListener('resize',fit);
+  window.addEventListener('resize',fit);
+}
+
+function drawBoard(){
+  const cv=document.getElementById('goban'),ctx=cv.getContext('2d');
+  const s=cv.width,{m,st}=met(s,boardSize);
+  ctx.fillStyle='#dcb468';ctx.fillRect(0,0,s,s);
+  const g=ctx.createLinearGradient(0,0,s,s);
+  g.addColorStop(0,'rgba(255,220,120,.18)');g.addColorStop(1,'rgba(140,80,0,.10)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,s,s);
+  ctx.strokeStyle='#7a5010';ctx.lineWidth=1;
+  for(let i=0;i<boardSize;i++){const px=m+i*st,py=m+i*st;ctx.beginPath();ctx.moveTo(px,m);ctx.lineTo(px,m+(boardSize-1)*st);ctx.stroke();ctx.beginPath();ctx.moveTo(m,py);ctx.lineTo(m+(boardSize-1)*st,py);ctx.stroke();}
+  ctx.fillStyle='#7a5010';
+  for(const[sx,sy]of stars(boardSize)){ctx.beginPath();ctx.arc(m+sx*st,m+sy*st,st*.09,0,Math.PI*2);ctx.fill();}
+  ctx.font=`${Math.max(8,st*.28)}px 'JetBrains Mono',monospace`;ctx.fillStyle='#7a5010';ctx.textAlign='center';ctx.textBaseline='middle';
+  for(let i=0;i<boardSize;i++){const px=m+i*st;ctx.fillText(LTRS[i],px,m*.38);ctx.fillText(LTRS[i],px,s-m*.38);ctx.fillText(String(boardSize-i),m*.38,m+i*st);ctx.fillText(String(boardSize-i),s-m*.38,m+i*st);}
+  for(let y=0;y<boardSize;y++)for(let x=0;x<boardSize;x++)if(boardGrid[y][x])drawStone(ctx,m+x*st,m+y*st,st*.46,boardGrid[y][x]);
+}
+
+function drawStone(ctx,cx,cy,r,col){
+  ctx.save();
+  if(col==='black'||col==='B'){const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);g.addColorStop(0,'#555');g.addColorStop(1,'#111');ctx.fillStyle=g;ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=4;ctx.shadowOffsetX=2;ctx.shadowOffsetY=2;}
+  else{const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.05,cx,cy,r);g.addColorStop(0,'#fff');g.addColorStop(1,'#ccc');ctx.fillStyle=g;ctx.shadowColor='rgba(0,0,0,.3)';ctx.shadowBlur=3;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;}
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  if(col==='white'||col==='W'){ctx.strokeStyle='#aaa';ctx.lineWidth=.5;ctx.stroke();}
+  ctx.restore();
+}
+
+function stars(sz){
+  if(sz===19)return[[3,3],[9,3],[15,3],[3,9],[9,9],[15,9],[3,15],[9,15],[15,15]];
+  if(sz===13)return[[3,3],[9,3],[3,9],[9,9],[6,6]];
+  return[[2,2],[6,2],[4,4],[2,6],[6,6]];
+}
+
+/* ══════════════════════════════════════════════
+   DERS YÜKLEMEsİ
+══════════════════════════════════════════════ */
+function loadLesson(lesson){
+  CUR_LESSON=lesson; CUR_STEP=0;
+  loadStep(0); updateSidebar(); updateProgress();
+}
+
+function loadStep(idx){
+  const step=CUR_LESSON.steps[idx];
+  if(!step)return;
+  CUR_STEP=idx; stepDone=false;
+
+  const chap=CURRICULUM.find(c=>c.lessons.some(l=>l.id===CUR_LESSON.id));
+  document.getElementById('chapter-tag').textContent=chap?.title||'';
+  document.getElementById('lesson-title').textContent=CUR_LESSON.title;
+  document.getElementById('lesson-body').innerHTML=step.text;
+  renderDots();
+
+  document.getElementById('step-counter').textContent=`Adım ${idx+1} / ${CUR_LESSON.steps.length}`;
+  document.getElementById('btn-prev').disabled=idx===0;
+
+  // Tahta
+  initCanvas(step.size||9);
+  (step.board||[]).forEach(s=>{ if(inB(s.x,s.y,boardSize)) boardGrid[s.y][s.x]=s.color==='B'?'black':'white'; });
+  drawBoard();
+
+  // Feedback
+  setFb(step.fb?.t||'Tahtayı inceleyin.',step.fb?.c||'info');
+
+  // Click
+  const cv=document.getElementById('goban');
+  cv.onclick=null;
+
+  if(step.answer||step.answers){
+    cv.onclick=e=>onClick(e,step);
+  }
+
+  if(step.auto){ stepDone=true; }
+  updateNextBtn(step);
+}
+
+function onClick(e,step){
+  if(stepDone)return;
+  const cv=document.getElementById('goban');
+  const rect=cv.getBoundingClientRect();
+  const sx=cv.width/rect.width,sy=cv.height/rect.height;
+  const cx=(e.clientX-rect.left)*sx,cy=(e.clientY-rect.top)*sy;
+  const{m,st}=met(cv.width,boardSize);
+  const xi=Math.round((cx-m)/st),yi=Math.round((cy-m)/st);
+  if(!inB(xi,yi,boardSize)||boardGrid[yi][xi])return;
+
+  let ok=false;
+  if(step.answers==='any') ok=true;
+  else if(Array.isArray(step.answers)) ok=step.answers.some(a=>a.x===xi&&a.y===yi);
+  else if(step.answer) ok=step.answer.x===xi&&step.answer.y===yi;
+
+  const turn=step.turn||'black';
+  boardGrid[yi][xi]=turn;
+  drawBoard();
+
+  if(ok){
+    setFb(step.fb_ok||'Doğru!','correct');
+    stepDone=true;
+    if(step.capture){ setTimeout(()=>{ step.capture.forEach(c=>{if(inB(c.x,c.y,boardSize))boardGrid[c.y][c.x]=null;}); drawBoard(); },350); }
+    updateNextBtn(step);
+  } else {
+    setFb(step.fb_err||'Yanlış, tekrar dene.','wrong');
+    const fb=document.getElementById('feedback');
+    fb.classList.add('shake');
+    setTimeout(()=>{ fb.classList.remove('shake'); boardGrid[yi][xi]=null; drawBoard(); },400);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   NAVİGASYON
+══════════════════════════════════════════════ */
+function nextStep(){
+  if(!CUR_LESSON)return;
+  if(CUR_STEP<CUR_LESSON.steps.length-1){ loadStep(CUR_STEP+1); return; }
+  // Ders bitti
+  doneLessons.add(CUR_LESSON.id);
+  localStorage.setItem('go_done',JSON.stringify([...doneLessons]));
+  updateSidebar(); updateProgress();
+
+  const chap=CURRICULUM.find(c=>c.lessons.some(l=>l.id===CUR_LESSON.id));
+  if(chap&&chap.lessons.every(l=>doneLessons.has(l.id))){
+    document.getElementById('complete-msg').textContent=`"${chap.title}" bölümünü tamamladın! 🎊`;
+    document.getElementById('complete-screen').classList.add('show');
+    return;
+  }
+  const idx=ALL_LESSONS.findIndex(l=>l.id===CUR_LESSON.id);
+  if(idx<ALL_LESSONS.length-1) loadLesson(ALL_LESSONS[idx+1]);
+}
+
+function prevStep(){ if(CUR_STEP>0)loadStep(CUR_STEP-1); }
+
+function closeComplete(){
+  document.getElementById('complete-screen').classList.remove('show');
+  const idx=ALL_LESSONS.findIndex(l=>l.id===CUR_LESSON.id);
+  if(idx<ALL_LESSONS.length-1)loadLesson(ALL_LESSONS[idx+1]);
+}
+
+function updateNextBtn(step){
+  const btn=document.getElementById('btn-next');
+  const isLast=CUR_STEP===CUR_LESSON.steps.length-1;
+  btn.disabled=!(step.auto||stepDone);
+  btn.textContent=isLast?'Dersi Bitir ✓':'İleri →';
+}
+
+/* ══════════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════════ */
+function buildSidebar(){
+  const el=document.getElementById('curriculum');
+  el.innerHTML='';
+  CURRICULUM.forEach((chap,ci)=>{
+    const chapEl=document.createElement('div');
+    chapEl.className='chapter';
+    const title=document.createElement('div');
+    title.className='chapter-title open';
+    title.innerHTML=`<div class="ch-left"><span class="ch-num">${ci+1}</span><span>${chap.title}</span></div><span class="ch-arrow">▶</span>`;
+    title.onclick=()=>{ title.classList.toggle('open'); list.classList.toggle('open'); };
+    chapEl.appendChild(title);
+    const list=document.createElement('div');
+    list.className='lesson-list open';
+    chap.lessons.forEach((lesson,li)=>{
+      const item=document.createElement('div');
+      item.className='lesson-item'+(CUR_LESSON?.id===lesson.id?' active':'')+(doneLessons.has(lesson.id)?' done':'');
+      item.dataset.id=lesson.id;
+      item.innerHTML=`<span class="li-check">✓</span><span class="li-num">${ci+1}.${li+1}</span>${lesson.title}`;
+      item.onclick=()=>loadLesson(lesson);
+      list.appendChild(item);
+    });
+    chapEl.appendChild(list);
+    el.appendChild(chapEl);
+  });
+}
+
+function updateSidebar(){
+  document.querySelectorAll('.lesson-item').forEach(el=>{
+    const id=el.dataset.id;
+    el.classList.toggle('active',CUR_LESSON?.id===id);
+    el.classList.toggle('done',doneLessons.has(id));
+  });
+}
+
+function updateProgress(){
+  const done=doneLessons.size;
+  const pct=TOTAL_LESSONS>0?Math.round(done/TOTAL_LESSONS*100):0;
+  document.getElementById('prog-text').textContent=`${done} / ${TOTAL_LESSONS}`;
+  document.getElementById('prog-fill').style.width=pct+'%';
+}
+
+function setFb(text,type){
+  const box=document.getElementById('feedback');
+  const icon=box.querySelector('.fb-icon');
+  box.className='feedback-box '+type;
+  document.getElementById('fb-text').textContent=text;
+  icon.textContent=type==='correct'?'✓':type==='wrong'?'✗':'💡';
+}
+
+function renderDots(){
+  const el=document.getElementById('step-dots');
+  el.innerHTML='';
+  if(!CUR_LESSON)return;
+  CUR_LESSON.steps.forEach((_,i)=>{
+    const d=document.createElement('div');
+    d.className='sdot'+(i===CUR_STEP?' active':i<CUR_STEP?' done':'');
+    d.onclick=()=>{ if(i<CUR_STEP)loadStep(i); };
+    el.appendChild(d);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   BAŞLAT
+══════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded',()=>{
+  buildSidebar(); updateProgress();
+  const first=ALL_LESSONS.find(l=>!doneLessons.has(l.id))||ALL_LESSONS[0];
+  loadLesson(first);
+});
+</script>
+</body>
+</html>
