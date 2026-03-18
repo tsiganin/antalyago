@@ -281,9 +281,9 @@ const CURRICULUM = [
     ]},
 
     { id:'l2', title:'Özgürlükler (Liberty)', steps:[
-      { text:`<p>Her taşın komşu boş noktalarına <strong class="term">özgürlük</strong> (liberty) denir.</p><p>Ortadaki bir taşın <strong>4 özgürlüğü</strong> vardır (üst, alt, sol, sağ).</p>`, board:[{color:'B',x:4,y:4}], auto:true, size:9, fb:{t:'Ortadaki siyah taşın 4 özgürlüğü var.',c:'info'} },
-      { text:`<p>Kenar noktasındaki taşın <strong>3 özgürlüğü</strong>, köşedekinin ise <strong>2 özgürlüğü</strong> vardır.</p><div class="highlight">Özgürlük azaldıkça taş tehlikeye girer. Köşe ve kenar taşları daha savunmasızdır.</div>`, board:[{color:'B',x:0,y:0},{color:'W',x:8,y:4}], auto:true, size:9, fb:{t:'Köşe: 2 özgürlük · Kenar: 3 özgürlük · Orta: 4 özgürlük',c:'info'} },
-      { text:`<p>Yatay veya dikey olarak birbirine bağlı taşlar <strong>grup</strong> oluşturur. Grubun özgürlüğü tüm taşlarının boş komşularının toplamıdır.</p>`, board:[{color:'B',x:3,y:4},{color:'B',x:4,y:4},{color:'B',x:5,y:4}], auto:true, size:9, fb:{t:'Bu üç taş bir grup — birlikte 8 özgürlüğü var.',c:'info'} },
+      { text:`<p>Her taşın komşu boş noktalarına <strong class="term">özgürlük</strong> (liberty) denir.</p><p>Ortadaki bir taşın <strong>4 özgürlüğü</strong> vardır (üst, alt, sol, sağ).</p>`, board:[{color:'B',x:4,y:4}], markers:[{x:4,y:3},{x:3,y:4},{x:5,y:4},{x:4,y:5}], auto:true, size:9, fb:{t:'Ortadaki siyah taşın 4 özgürlüğü var.',c:'info'} },
+      { text:`<p>Kenar noktasındaki taşın <strong>3 özgürlüğü</strong>, köşedekinin ise <strong>2 özgürlüğü</strong> vardır.</p><div class="highlight">Özgürlük azaldıkça taş tehlikeye girer. Köşe ve kenar taşları daha savunmasızdır.</div>`, board:[{color:'B',x:0,y:0},{color:'W',x:8,y:4}], markers:[{x:1,y:0},{x:0,y:1},{x:8,y:3},{x:7,y:4},{x:8,y:5}], auto:true, size:9, fb:{t:'Köşe: 2 özgürlük · Kenar: 3 özgürlük · Orta: 4 özgürlük',c:'info'} },
+      { text:`<p>Yatay veya dikey olarak birbirine bağlı taşlar <strong>grup</strong> oluşturur. Grubun özgürlüğü tüm taşlarının boş komşularının toplamıdır.</p>`, board:[{color:'B',x:3,y:4},{color:'B',x:4,y:4},{color:'B',x:5,y:4}], markers:[{x:3,y:3},{x:2,y:4},{x:3,y:5},{x:4,y:3},{x:4,y:5},{x:5,y:3},{x:6,y:4},{x:5,y:5}], auto:true, size:9, fb:{t:'Bu üç taş bir grup — birlikte 8 özgürlüğü var.',c:'info'} },
     ]},
 
     { id:'l3', title:'Taş Yakalama', steps:[
@@ -410,6 +410,25 @@ function drawBoard(){
   ctx.font=`${Math.max(8,st*.28)}px 'JetBrains Mono',monospace`;ctx.fillStyle='#7a5010';ctx.textAlign='center';ctx.textBaseline='middle';
   for(let i=0;i<boardSize;i++){const px=m+i*st;ctx.fillText(LTRS[i],px,m*.38);ctx.fillText(LTRS[i],px,s-m*.38);ctx.fillText(String(boardSize-i),m*.38,m+i*st);ctx.fillText(String(boardSize-i),s-m*.38,m+i*st);}
   for(let y=0;y<boardSize;y++)for(let x=0;x<boardSize;x++)if(boardGrid[y][x])drawStone(ctx,m+x*st,m+y*st,st*.46,boardGrid[y][x]);
+
+  // Özgürlük işaretleri (kırmızı çarpı)
+  const step = CUR_LESSON?.steps[CUR_STEP];
+  if(step?.markers){
+    step.markers.forEach(mk=>{
+      if(!inB(mk.x,mk.y,boardSize)) return;
+      const cx=m+mk.x*st, cy=m+mk.y*st;
+      const r=st*.22;
+      ctx.save();
+      ctx.strokeStyle='#e03030';
+      ctx.lineWidth=st*.08;
+      ctx.lineCap='round';
+      // Çarpı çizgisi 1
+      ctx.beginPath(); ctx.moveTo(cx-r,cy-r); ctx.lineTo(cx+r,cy+r); ctx.stroke();
+      // Çarpı çizgisi 2
+      ctx.beginPath(); ctx.moveTo(cx+r,cy-r); ctx.lineTo(cx-r,cy+r); ctx.stroke();
+      ctx.restore();
+    });
+  }
 }
 
 function drawStone(ctx,cx,cy,r,col){
@@ -456,6 +475,10 @@ function loadStep(idx){
 
   // Feedback
   setFb(step.fb?.t||'Tahtayı inceleyin.',step.fb?.c||'info');
+
+  // Marker'ları global'e kaydet
+  window._curMarkers = step.markers || [];
+  drawBoard();
 
   // Click
   const cv=document.getElementById('goban');
